@@ -1,7 +1,7 @@
 ```
-Package: journal_scraper
+Package: paperfetch
 Type: Package
-Title: Journal Scraper
+Title: Paper Fetch
 Version: 0.1.0
 Author: Kaalindi Misra
 Maintainer: Kaalindi Misra <misra.kaalindi@hsr.it>
