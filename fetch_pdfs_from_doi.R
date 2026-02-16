@@ -1,25 +1,47 @@
-library(httr2)
-library(rvest)
-library(xml2)  # Explicitly load for url_absolute()
-library(readr)
-library(dplyr)
-library(cli)
-library(progress)
+#' Fetch PDFs from DOIs with Logging and Reporting
+#'
+#' Downloads PDFs for multiple DOIs from a CSV file with intelligent fallback strategies.
+#' Generates structured logs and PRISMA-compliant reports.
+#'
+#' @param csv_file_path Path to CSV file containing a 'doi' column
+#' @param output_folder Directory for saving PDFs (created if doesn't exist)
+#' @param delay Seconds to wait between requests (default: 2)
+#' @param email Your email for Unpaywall API identification (required)
+#' @param timeout Maximum seconds to wait per request (default: 15)
+#' @param log_file Path for structured CSV log (default: "download_log.csv")
+#' @param report_file Path for Markdown report (default: "acquisition_report.md")
+#'
+#' @return Invisibly returns the log dataframe
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' fetch_pdfs_from_doi(
+#'   csv_file_path = "dois.csv",
+#'   output_folder = "papers",
+#'   email = "you@institution.edu"
+#' )
+#' }
 
-fetch_pdfs_from_doi <- function(csv_file_path, output_folder, delay = 2, email = "your@email.com", 
-                                timeout = 15, log_file = "download_log.csv", 
-                                report_file = "acquisition_report.md"){
+fetch_pdfs_from_doi <- function(csv_file_path, 
+                                output_folder = "downloads", 
+                                delay = 2, 
+                                email = "your@email.com", 
+                                timeout = 15,
+                                log_file = "download_log.csv",
+                                report_file = "acquisition_report.md") {
   
-  # Initialize log dataframe
-  log_data <- data.frame( id = character(),id_type = character(),
-    timestamp = character(),method = character(),
-    status = character(), success = logical(),
-    failure_reason = character(), pdf_url = character(),
-    file_path = character(),  file_size_kb = numeric(),
-    stringsAsFactors = FALSE)
+  # Load required libraries
+  require(httr2)
+  require(rvest)
+  require(xml2)
+  require(readr)
+  require(dplyr)
+  require(cli)
+  require(progress)
   
   # Read the CSV file
-  doi_data <- read_csv(csv_file_path)
+  doi_data <- read_csv(csv_file_path, show_col_types = FALSE)
   
   # Ensure DOI column exists
   if (!"doi" %in% colnames(doi_data)) {
@@ -31,8 +53,23 @@ fetch_pdfs_from_doi <- function(csv_file_path, output_folder, delay = 2, email =
     dir.create(output_folder, recursive = TRUE)
   }
   
-  # Define consistent User-Agent (be honest about being a scraper)
-  user_agent <- paste0("Academic PDF Scraper/1.0 (Contact: ", email, "; R package for systematic reviews)")
+  # Define consistent User-Agent
+  user_agent <- paste0("Academic PDF Scraper/1.0 (Contact: ", email, "; R package paperfetch for systematic reviews)")
+  
+  # Initialize log dataframe
+  log_data <- data.frame(
+    id = character(),
+    id_type = character(),
+    timestamp = character(),
+    method = character(),
+    status = character(),
+    success = logical(),
+    failure_reason = character(),
+    pdf_url = character(),
+    file_path = character(),
+    file_size_kb = numeric(),
+    stringsAsFactors = FALSE
+  )
   
   # Create a progress bar
   pb <- progress_bar$new(
@@ -49,18 +86,36 @@ fetch_pdfs_from_doi <- function(csv_file_path, output_folder, delay = 2, email =
     file_name <- paste0(clean_doi, ".pdf")
     file_path <- file.path(output_folder, file_name)
     
+    # Initialize tracking variables
+    pdf_url <- NULL
+    article_url <- NULL
+    download_success <- FALSE
+    current_method <- NA_character_
+    http_status <- NA_character_
+    failure_reason <- NA_character_
+    start_time <- Sys.time()
+    
     # Skip if file already exists
     if (file.exists(file_path)) {
       cli_alert_info("Skipped (exists): {doi}")
+      
+      log_entry <- create_log_entry(
+        id = doi,
+        id_type = "doi",
+        timestamp = format(start_time, "%Y-%m-%dT%H:%M:%SZ"),
+        method = "skipped",
+        status = "exists",
+        success = TRUE,
+        failure_reason = NA_character_,
+        pdf_url = NA_character_,
+        file_path = file_path,
+        file_size_kb = file.size(file_path) / 1024
+      )
+      log_data <- rbind(log_data, log_entry)
       next
     }
     
-    pdf_url <- NULL
-    article_url <- NULL  # Track this for Referer header
-    download_success <- FALSE
-    
-    # STEP 1: Try Unpaywall API first (Fast & Reliable for Open Access)
-    # Unpaywall indexes PMC AWS locations via best_oa_location
+    # STEP 1: Try Unpaywall API first
     tryCatch({
       unpaywall_response <- request(paste0("https://api.unpaywall.org/v2/", doi, "?email=", email)) %>%
         req_timeout(timeout) %>%
@@ -68,12 +123,16 @@ fetch_pdfs_from_doi <- function(csv_file_path, output_folder, delay = 2, email =
         req_perform() %>%
         resp_body_json()
       
-      # Use best_oa_location for most reliable OA source
       if (!is.null(unpaywall_response$best_oa_location)) {
         pdf_url <- unpaywall_response$best_oa_location$url_for_pdf
         article_url <- unpaywall_response$best_oa_location$url_for_landing_page
+        current_method <- "unpaywall"
+        http_status <- "200"
       }
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      current_method <<- "unpaywall"
+      http_status <<- "error"
+    })
     
     # STEP 2: If Unpaywall fails, try resolving DOI and scraping
     if (is.null(pdf_url)) {
@@ -84,110 +143,129 @@ fetch_pdfs_from_doi <- function(csv_file_path, output_folder, delay = 2, email =
           req_user_agent(user_agent) %>%
           req_timeout(timeout) %>%
           req_perform()
+        
         article_url <- resp_url(response)
-      }, error = function(e) NULL)
-      
-      if (!is.null(article_url)) {
+        http_status <- as.character(response$status_code)
+        
         # Check if the article_url ends with .pdf
         if (grepl("\\.pdf$", article_url)) {
           pdf_url <- article_url
+          current_method <- "doi_resolution"
         } else {
           # Attempt to find PDF link from the resolved URL
-          tryCatch({
-            page <- request(article_url) %>%
-              req_user_agent(user_agent) %>%
-              req_timeout(timeout) %>%
-              req_perform() %>%
-              resp_body_html()
+          page <- request(article_url) %>%
+            req_user_agent(user_agent) %>%
+            req_timeout(timeout) %>%
+            req_perform() %>%
+            resp_body_html()
+          
+          # Method 1: Try citation_pdf_url meta tag
+          pdf_url <- page %>% 
+            html_node("meta[name='citation_pdf_url']") %>% 
+            html_attr("content")
+          
+          if (!is.na(pdf_url)) {
+            current_method <- "citation_metadata"
+          } else {
+            # Method 2: Search for PDF links
+            pdf_link <- page %>%
+              html_nodes("a") %>%
+              html_attr("href") %>%
+              .[grepl("\\.pdf$", .)][1]
             
-            # Method 1: Try citation_pdf_url meta tag (most reliable)
-            pdf_url <- page %>% 
-              html_node("meta[name='citation_pdf_url']") %>% 
-              html_attr("content")
-            
-            # Method 2: If meta tag not found, try searching for PDF links
-            if (is.na(pdf_url)) {
-              pdf_link <- page %>%
-                html_nodes("a") %>%
-                html_attr("href") %>%
-                .[grepl("\\.pdf$", .)][1]
-              
-              if (!is.na(pdf_link)) {
-                # Convert relative link to absolute link if necessary
-                if (!grepl("^http", pdf_link)) {
-                  pdf_url <- xml2::url_absolute(pdf_link, article_url)
-                } else {
-                  pdf_url <- pdf_link
-                }
+            if (!is.na(pdf_link)) {
+              if (!grepl("^http", pdf_link)) {
+                pdf_url <- xml2::url_absolute(pdf_link, article_url)
+              } else {
+                pdf_url <- pdf_link
               }
+              current_method <- "scrape"
             }
-          }, error = function(e) NULL)
+          }
         }
-      }
+      }, error = function(e) {
+        if (is.na(current_method)) current_method <<- "doi_resolution"
+        if (grepl("timeout|timed out", e$message, ignore.case = TRUE)) {
+          http_status <<- "timeout"
+          failure_reason <<- "timeout"
+        } else {
+          http_status <<- "error"
+          failure_reason <<- conditionMessage(e)
+        }
+      })
     }
     
     # STEP 3: Download the PDF if a URL was found
     if (!is.null(pdf_url) && !is.na(pdf_url)) {
       tryCatch({
-        # Build request with consistent user-agent and Referer header
         download_req <- request(pdf_url) %>%
           req_user_agent(user_agent) %>%
           req_timeout(timeout)
         
-        # Add Referer header if we have the article URL (helps with server validation)
         if (!is.null(article_url)) {
           download_req <- download_req %>% req_headers("Referer" = article_url)
         }
         
-        # Perform download
-        download_req %>% req_perform(path = file_path)
-        
+        download_response <- download_req %>% req_perform(path = file_path)
+        http_status <- as.character(download_response$status_code)
         download_success <- TRUE
         cli_alert_success("Downloaded: {doi}")
+        
       }, error = function(e) {
-        cli_alert_danger("Download failed: {doi} - {conditionMessage(e)}")
+        if (grepl("403", e$message)) {
+          http_status <<- "403"
+          failure_reason <<- "paywalled"
+        } else if (grepl("404", e$message)) {
+          http_status <<- "404"
+          failure_reason <<- "not_found"
+        } else if (grepl("500|502|503", e$message)) {
+          http_status <<- "500"
+          failure_reason <<- "server_error"
+        } else if (grepl("timeout|timed out", e$message, ignore.case = TRUE)) {
+          http_status <<- "timeout"
+          failure_reason <<- "timeout"
+        } else {
+          http_status <<- "error"
+          failure_reason <<- conditionMessage(e)
+        }
+        cli_alert_danger("Download failed: {doi} - {failure_reason}")
       })
     } else {
+      if (is.na(failure_reason)) {
+        failure_reason <- "no_pdf_found"
+      }
       cli_alert_danger("No PDF found: {doi}")
     }
     
-    # Wait for a specified delay before the next request
-    Sys.sleep(delay)
     # Log the attempt
-    log_entry <- data.frame(
+    log_entry <- create_log_entry(
       id = doi,
       id_type = "doi",
-      timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"),
-      method = current_method,  # Track which method succeeded
+      timestamp = format(start_time, "%Y-%m-%dT%H:%M:%SZ"),
+      method = current_method,
       status = http_status,
       success = download_success,
       failure_reason = if (!download_success) failure_reason else NA_character_,
-      pdf_url = if (!is.null(pdf_url)) pdf_url else NA_character_,
+      pdf_url = if (!is.null(pdf_url) && !is.na(pdf_url)) pdf_url else NA_character_,
       file_path = if (download_success) file_path else NA_character_,
-      file_size_kb = if (download_success) file.size(file_path) / 1024 else NA_real_,
-      stringsAsFactors = FALSE
+      file_size_kb = if (download_success) file.size(file_path) / 1024 else NA_real_
     )
     
     log_data <- rbind(log_data, log_entry)
+    
+    # Wait for delay
+    Sys.sleep(delay)
   }
+  
   # Save log
   write_csv(log_data, log_file)
   cli_alert_success("Download log saved to {log_file}")
   
   # Generate report
-  generate_acquisition_report(log_data, report_file, email)
+  generate_acquisition_report(log_data, report_file, email, "doi")
   cli_alert_success("Acquisition report saved to {report_file}")
   
   cli_alert_info("Download process completed!")
+  
+  invisible(log_data)
 }
-
-# Example usage:
-#fetch_pdfs_from_doi(
-#  csv_file_path = "dois.csv",
-#  output_folder = "papers",
-#  delay = 2,
-#  email = "you@institution.edu",
-#  timeout = 15,
-#  log_file = "doi_download_log.csv",
-#  report_file = "doi_acquisition_report.md"
-#)
