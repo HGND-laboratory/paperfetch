@@ -383,12 +383,10 @@ Every download attempt is logged to `download_log.csv` with the following fields
 ## Failed Records
 
 ### Paywalled Content (n=67)
-```
 10.1016/j.cell.2020.01.001
 10.1126/science.abc1234
 10.1038/s41586-020-1234-5
 ...
-```
 
 *[Full lists provided in actual report]*
 
