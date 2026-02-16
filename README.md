@@ -45,7 +45,7 @@
 install.packages("devtools")
 
 # Install paperfetch package
-devtools::install_github("misrak/paperfetch")
+devtools::install_github("HGND-laboratory/paperfetch")
 ```
 
 **Dependencies:**
