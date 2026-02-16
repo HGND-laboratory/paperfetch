@@ -828,9 +828,6 @@ paperfetch/
 │   └── testthat/
 ├── vignettes/
 │   └── systematic_review_workflow.Rmd  # Tutorial
-├── inst/
-│   └── templates/
-│       └── report_template.Rmd     # Report template
 ├── DESCRIPTION                     # Package metadata
 ├── NAMESPACE                       # Exported functions
 ├── LICENSE                         # MIT License

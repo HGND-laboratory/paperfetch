@@ -78,11 +78,14 @@ convert_pmc_to_pmid <- function(pmc_ids) {
 #' @param pdf_url Final PDF URL (if found)
 #' @param file_path Local file path
 #' @param file_size_kb File size in KB
+#' @param pdf_valid Logical indicating PDF validation result (optional)
+#' @param pdf_invalid_reason Reason for PDF invalidation (optional)
 #' @return Data frame with one row
 #' @keywords internal
 
 create_log_entry <- function(id, id_type, timestamp, method, status, success, 
-                             failure_reason, pdf_url, file_path, file_size_kb) {
+                             failure_reason, pdf_url, file_path, file_size_kb,
+                             pdf_valid = NA, pdf_invalid_reason = NA_character_) {
   data.frame(
     id = id,
     id_type = id_type,
@@ -94,6 +97,8 @@ create_log_entry <- function(id, id_type, timestamp, method, status, success,
     pdf_url = pdf_url,
     file_path = file_path,
     file_size_kb = file_size_kb,
+    pdf_valid = pdf_valid,
+    pdf_invalid_reason = pdf_invalid_reason,
     stringsAsFactors = FALSE
   )
 }

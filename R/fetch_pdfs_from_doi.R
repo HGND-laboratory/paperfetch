@@ -29,7 +29,9 @@ fetch_pdfs_from_doi <- function(csv_file_path,
                                 email = "your@email.com", 
                                 timeout = 15,
                                 log_file = "download_log.csv",
-                                report_file = "acquisition_report.md") {
+                                report_file = "acquisition_report.md",
+                                validate_pdfs = TRUE, 
+                                remove_invalid = TRUE) {
   
   # Load required libraries
   require(httr2)
@@ -208,8 +210,25 @@ fetch_pdfs_from_doi <- function(csv_file_path,
         
         download_response <- download_req %>% req_perform(path = file_path)
         http_status <- as.character(download_response$status_code)
-        download_success <- TRUE
-        cli_alert_success("Downloaded: {doi}")
+        
+        # VALIDATION: Check if downloaded file is actually a valid PDF
+        validation_result <- validate_pdf(file_path, min_size_kb = 10, verbose = FALSE)
+        
+        if (validation_result$valid) {
+          download_success <- TRUE
+          cli_alert_success("Downloaded: {doi}")
+        } else {
+          # File is invalid - remove it and mark as failed
+          unlink(file_path)
+          download_success <- FALSE
+          failure_reason <- paste0("invalid_pdf_", validation_result$reason)
+          
+          if (validation_result$is_html) {
+            cli_alert_danger("Downloaded HTML error page (not PDF): {doi}")
+          } else {
+            cli_alert_danger("Downloaded corrupt/invalid PDF: {doi} - {validation_result$reason}")
+          }
+        }
         
       }, error = function(e) {
         if (grepl("403", e$message)) {
@@ -261,7 +280,22 @@ fetch_pdfs_from_doi <- function(csv_file_path,
   write_csv(log_data, log_file)
   cli_alert_success("Download log saved to {log_file}")
   
-  # Generate report
+  # Validate PDFs if requested
+  if (validate_pdfs) {
+    cli_h2("Validating Downloaded PDFs")
+    
+    validation_results <- check_pdf_integrity(
+      output_folder = output_folder,
+      log_file = log_file,
+      remove_invalid = remove_invalid,
+      use_advanced = FALSE
+    )
+    
+    # Update log_data with validation results
+    log_data <- read_csv(log_file, show_col_types = FALSE)
+  }
+  
+  # Generate report (now includes validation data if available)
   generate_acquisition_report(log_data, report_file, email, "doi")
   cli_alert_success("Acquisition report saved to {report_file}")
   
