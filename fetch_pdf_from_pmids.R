@@ -1,4 +1,4 @@
-fetch_pdf_from_pubmed <- function(pubmed_id, destination) {
+fetch_pdf_from_pmids <- function(pubmed_id, destination) {
   base_url <- "https://pubmed.ncbi.nlm.nih.gov/"
   pubmed_url <- paste0(base_url, pubmed_id)
   
