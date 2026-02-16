@@ -26,7 +26,8 @@ Install the development version from GitHub:
 install.packages("devtools")
 
 # Install paperfetch package
-devtools::install_github("misrak/paperfetch")
+devtools::install_github("HGND-laboratory/paperfetch")
+
 ```
 
 **Dependencies:**
@@ -446,28 +447,6 @@ We welcome contributions! This package is under active development for the scien
 - Institutional repository support (e.g., university repositories)
 - Better error recovery and retry logic
 - PDF validation (ensure downloaded files are valid PDFs)
-
----
-
-## Citation
-
-If you use `paperfetch` in your research, please cite:
-
-```
-Misra, K. (2025). paperfetch: Automated PDF Retrieval for Systematic Reviews. 
-R package version 0.1.0. https://github.com/misrak/paperfetch
-```
-
-**BibTeX:**
-```bibtex
-@Manual{paperfetch,
-  title = {paperfetch: Automated PDF Retrieval for Systematic Reviews},
-  author = {Kaalindi Misra},
-  year = {2025},
-  note = {R package version 0.1.0},
-  url = {https://github.com/misrak/paperfetch},
-}
-```
 
 ---
 
