@@ -221,3 +221,112 @@ convert_pmc_to_pmid <- function(pmc_ids) {
   
   pmids[!is.na(pmids)]
 }
+
+generate_acquisition_report <- function(log_data, report_file, email) {
+  
+  # Calculate statistics
+  total <- nrow(log_data)
+  successful <- sum(log_data$success, na.rm = TRUE)
+  failed <- total - successful
+  success_rate <- (successful / total) * 100
+  
+  # Method breakdown
+  method_summary <- log_data %>%
+    group_by(method) %>%
+    summarise(
+      attempts = n(),
+      success = sum(success, na.rm = TRUE),
+      success_rate = (success / attempts) * 100
+    ) %>%
+    arrange(desc(success_rate))
+  
+  # Failure analysis
+  failure_summary <- log_data %>%
+    filter(!success) %>%
+    group_by(failure_reason) %>%
+    summarise(count = n()) %>%
+    mutate(percentage = (count / failed) * 100) %>%
+    arrange(desc(count))
+  
+  # Failed records by reason
+  paywalled <- log_data %>% filter(grepl("403|paywalled", failure_reason, ignore.case = TRUE)) %>% pull(id)
+  no_pdf <- log_data %>% filter(grepl("no_pdf|not_found", failure_reason, ignore.case = TRUE)) %>% pull(id)
+  technical <- log_data %>% filter(grepl("timeout|500|error", failure_reason, ignore.case = TRUE)) %>% pull(id)
+  
+  # Build report
+  report <- paste0(
+    "# Full-Text Acquisition Report\n\n",
+    "**Generated:** ", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n",
+    "**Package:** paperfetch v0.1.0\n",
+    "**Analyst:** ", email, "\n\n",
+    "---\n\n",
+    "## Summary\n\n",
+    "- **Total records:** ", total, "\n",
+    "- **Successfully downloaded:** ", successful, " (", sprintf("%.1f%%", success_rate), ")\n",
+    "- **Failed to retrieve:** ", failed, " (", sprintf("%.1f%%", 100 - success_rate), ")\n\n",
+    "---\n\n",
+    "## Retrieval Methods\n\n",
+    "| Method | Attempts | Success | Success Rate |\n",
+    "|--------|----------|---------|-------------|\n"
+  )
+  
+  for (i in 1:nrow(method_summary)) {
+    report <- paste0(report,
+                     "| ", method_summary$method[i], " | ",
+                     method_summary$attempts[i], " | ",
+                     method_summary$success[i], " | ",
+                     sprintf("%.1f%%", method_summary$success_rate[i]), " |\n"
+    )
+  }
+  
+  report <- paste0(report,
+                   "\n---\n\n",
+                   "## Failure Analysis\n\n",
+                   "| Reason | Count | Percentage |\n",
+                   "|--------|-------|------------|\n"
+  )
+  
+  for (i in 1:nrow(failure_summary)) {
+    report <- paste0(report,
+                     "| ", failure_summary$failure_reason[i], " | ",
+                     failure_summary$count[i], " | ",
+                     sprintf("%.1f%%", failure_summary$percentage[i]), " |\n"
+    )
+  }
+  
+  report <- paste0(report,
+                   "\n---\n\n",
+                   "## Failed Records\n\n",
+                   "### Paywalled Content (n=", length(paywalled), ")\n```\n",
+                   paste(head(paywalled, 20), collapse = "\n"), "\n",
+                   if (length(paywalled) > 20) paste0("... and ", length(paywalled) - 20, " more") else "", "\n```\n\n",
+                   "### No PDF Available (n=", length(no_pdf), ")\n```\n",
+                   paste(head(no_pdf, 20), collapse = "\n"), "\n",
+                   if (length(no_pdf) > 20) paste0("... and ", length(no_pdf) - 20, " more") else "", "\n```\n\n",
+                   "### Technical Failures (n=", length(technical), ")\n```\n",
+                   paste(head(technical, 20), collapse = "\n"), "\n",
+                   if (length(technical) > 20) paste0("... and ", length(technical) - 20, " more") else "", "\n```\n\n",
+                   "---\n\n",
+                   "## Reproducibility Information\n\n",
+                   "**System Information:**\n",
+                   "- R version: ", R.version.string, "\n",
+                   "- paperfetch version: 0.1.0\n",
+                   "- Platform: ", R.version$platform, "\n\n",
+                   "**Parameters:**\n",
+                   "- Email: ", email, "\n",
+                   "- Date: ", format(Sys.Date(), "%Y-%m-%d"), "\n\n",
+                   "**Data Sources:**\n",
+                   "- Unpaywall API (https://unpaywall.org)\n",
+                   "- PubMed Central (https://www.ncbi.nlm.nih.gov/pmc/)\n",
+                   "- Publisher websites via DOI resolution\n\n",
+                   "---\n\n",
+                   "## Recommendations\n\n",
+                   "1. **Paywalled content:** Request via institutional library\n",
+                   "2. **No PDF available:** Check if HTML-only or contact authors\n",
+                   "3. **Technical failures:** Retry manually\n\n",
+                   "---\n\n",
+                   "**Note:** This report documents full-text retrieval procedures in accordance with PRISMA guidelines.\n"
+  )
+  
+  writeLines(report, report_file)
+}

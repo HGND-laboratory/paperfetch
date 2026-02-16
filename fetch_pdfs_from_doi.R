@@ -6,7 +6,18 @@ library(dplyr)
 library(cli)
 library(progress)
 
-download_pdfs_by_doi <- function(csv_file_path, output_folder, delay = 2, email = "your@email.com", timeout = 15) {
+fetch_pdfs_from_doi <- function(csv_file_path, output_folder, delay = 2, email = "your@email.com", 
+                                timeout = 15, log_file = "download_log.csv", 
+                                report_file = "acquisition_report.md"){
+  
+  # Initialize log dataframe
+  log_data <- data.frame( id = character(),id_type = character(),
+    timestamp = character(),method = character(),
+    status = character(), success = logical(),
+    failure_reason = character(), pdf_url = character(),
+    file_path = character(),  file_size_kb = numeric(),
+    stringsAsFactors = FALSE)
+  
   # Read the CSV file
   doi_data <- read_csv(csv_file_path)
   
@@ -142,16 +153,41 @@ download_pdfs_by_doi <- function(csv_file_path, output_folder, delay = 2, email 
     
     # Wait for a specified delay before the next request
     Sys.sleep(delay)
+    # Log the attempt
+    log_entry <- data.frame(
+      id = doi,
+      id_type = "doi",
+      timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"),
+      method = current_method,  # Track which method succeeded
+      status = http_status,
+      success = download_success,
+      failure_reason = if (!download_success) failure_reason else NA_character_,
+      pdf_url = if (!is.null(pdf_url)) pdf_url else NA_character_,
+      file_path = if (download_success) file_path else NA_character_,
+      file_size_kb = if (download_success) file.size(file_path) / 1024 else NA_real_,
+      stringsAsFactors = FALSE
+    )
+    
+    log_data <- rbind(log_data, log_entry)
   }
+  # Save log
+  write_csv(log_data, log_file)
+  cli_alert_success("Download log saved to {log_file}")
+  
+  # Generate report
+  generate_acquisition_report(log_data, report_file, email)
+  cli_alert_success("Acquisition report saved to {report_file}")
   
   cli_alert_info("Download process completed!")
 }
 
 # Example usage:
-# download_pdfs_by_doi(
-#   csv_file_path = "dois.csv", 
-#   output_folder = "pdfs", 
-#   delay = 2, 
-#   email = "yourname@institution.edu",
-#   timeout = 15
-# )
+#fetch_pdfs_from_doi(
+#  csv_file_path = "dois.csv",
+#  output_folder = "papers",
+#  delay = 2,
+#  email = "you@institution.edu",
+#  timeout = 15,
+#  log_file = "doi_download_log.csv",
+#  report_file = "doi_acquisition_report.md"
+#)
