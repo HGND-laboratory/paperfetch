@@ -129,8 +129,6 @@ downloads/
 [Full report includes failed DOI lists, reproducibility info, and recommendations]
 ```
 
-**→ Copy directly into your systematic review manuscript's methods section!**
-
 ---
 
 ## Main Functions
@@ -402,9 +400,6 @@ Every download attempt is logged to `download_log.csv` with the following fields
 2. **No PDF available (n=31):** Check if articles are HTML-only or contact authors
 3. **Technical failures (n=18):** Retry manually or contact publisher support
 ```
-
-**→ Perfect for copying into your PRISMA flow diagram documentation!**
-
 ---
 
 ## Shared Features Across All Functions
