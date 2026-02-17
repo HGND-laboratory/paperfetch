@@ -31,7 +31,8 @@ fetch_pdfs_from_pmids <- function(csv_file_path,
                                   log_file = "download_log.csv",
                                   report_file = "acquisition_report.md",
                                   validate_pdfs = TRUE,
-                                  remove_invalid = TRUE) {
+                                  remove_invalid = TRUE,
+                                  proxy          = NULL) {
   
   # Load required libraries
   require(httr2)
@@ -41,6 +42,9 @@ fetch_pdfs_from_pmids <- function(csv_file_path,
   require(dplyr)
   require(cli)
   require(progress)
+  
+  # Resolve email (argument → .Renviron → warning)
+  email <- resolve_email(email)
   
   # Read the CSV file
   pmid_data <- read_csv(csv_file_path, show_col_types = FALSE)
@@ -130,39 +134,42 @@ fetch_pdfs_from_pmids <- function(csv_file_path,
       next
     }
     
-    # STEP 1: Get DOI from PubMed and try Unpaywall
+    # ── STEP 1: PubMed page + Unpaywall ────────────────────────────────────────
     tryCatch({
-      pubmed_url <- paste0("https://pubmed.ncbi.nlm.nih.gov/", clean_pmid, "/")
-      
-      page <- request(pubmed_url) %>%
-        req_user_agent(user_agent) %>%
-        req_timeout(timeout) %>%
+      page <- build_request(
+        url        = paste0("https://pubmed.ncbi.nlm.nih.gov/", clean_pmid, "/"),
+        user_agent = user_agent,
+        timeout    = timeout,
+        proxy      = proxy                    # proxy passed through
+      ) %>%
         req_perform() %>%
         resp_body_html()
       
-      # Extract DOI
       doi <- page %>%
         html_node("meta[name='citation_doi']") %>%
         html_attr("content")
       
-      # If DOI found, try Unpaywall
       if (!is.na(doi) && !is.null(doi)) {
-        unpaywall_response <- request(paste0("https://api.unpaywall.org/v2/", doi, "?email=", email)) %>%
-          req_timeout(timeout) %>%
+        unpaywall_resp <- build_request(
+          url        = paste0("https://api.unpaywall.org/v2/", doi, "?email=", email),
+          user_agent = user_agent,
+          timeout    = timeout,
+          proxy      = proxy                  # proxy passed through
+        ) %>%
           req_retry(max_tries = 3) %>%
           req_perform() %>%
           resp_body_json()
         
-        if (!is.null(unpaywall_response$best_oa_location)) {
-          pdf_url <- unpaywall_response$best_oa_location$url_for_pdf
-          article_url <- unpaywall_response$best_oa_location$url_for_landing_page
+        if (!is.null(unpaywall_resp$best_oa_location)) {
+          pdf_url        <- unpaywall_resp$best_oa_location$url_for_pdf
+          article_url    <- unpaywall_resp$best_oa_location$url_for_landing_page
           current_method <- "unpaywall"
-          http_status <- "200"
+          http_status    <- "200"
         }
       }
     }, error = function(e) {
-      if (is.na(current_method)) current_method <<- "unpaywall"
-      http_status <<- "error"
+      current_method <<- "unpaywall"
+      http_status    <<- "error"
     })
     
     # STEP 2: Try PubMed Central (PMC)
@@ -283,39 +290,35 @@ fetch_pdfs_from_pmids <- function(csv_file_path,
       })
     }
     
-    # STEP 5: Download the PDF if a URL was found
+    # ── STEP 5: Download ────────────────────────────────────────────────────────
     if (!is.null(pdf_url) && !is.na(pdf_url)) {
       tryCatch({
-        download_req <- request(pdf_url) %>%
-          req_user_agent(user_agent) %>%
-          req_timeout(timeout)
+        dl_req <- build_request(
+          url        = pdf_url,
+          user_agent = user_agent,
+          timeout    = timeout,
+          proxy      = proxy
+        )
         
         if (!is.null(article_url)) {
-          download_req <- download_req %>% req_headers("Referer" = article_url)
+          dl_req <- dl_req %>% req_headers("Referer" = article_url)
         }
         
-        download_response <- download_req %>% req_perform(path = file_path)
-        http_status <- as.character(download_response$status_code)
+        dl_resp     <- dl_req %>% req_perform(path = file_path)
+        http_status <- as.character(dl_resp$status_code)
         
-        # VALIDATION: Check if downloaded file is actually a valid PDF
-        validation_result <- validate_pdf(file_path, min_size_kb = 10, verbose = FALSE)
+        # Integrity validation
+        validation <- validate_pdf(file_path)
         
-        if (validation_result$valid) {
+        if (validation$valid) {
           download_success <- TRUE
           cli_alert_success("Downloaded: PMID {clean_pmid}")
         } else {
-          # File is invalid - remove it and mark as failed
           unlink(file_path)
           download_success <- FALSE
-          failure_reason <- paste0("invalid_pdf_", validation_result$reason)
-          
-          if (validation_result$is_html) {
-            cli_alert_danger("Downloaded HTML error page (not PDF): PMID {clean_pmid}")
-          } else {
-            cli_alert_danger("Downloaded corrupt/invalid PDF: PMID {clean_pmid} - {validation_result$reason}")
-          }
+          failure_reason   <- paste0("invalid_pdf_", validation$reason)
+          cli_alert_danger("Invalid PDF: PMID {clean_pmid} [{validation$reason}]")
         }
-        
       }, error = function(e) {
         if (grepl("403", e$message)) {
           http_status <<- "403"

@@ -36,7 +36,8 @@ fetch_pdfs <- function(input,
                        report_file = "acquisition_report.md",
                        unfetched_file = "unfetched.txt",
                        validate_pdfs = TRUE,
-                       remove_invalid = TRUE) {
+                       remove_invalid = TRUE,
+                       proxy          = NULL) {
   
   # Load required libraries
   require(httr2)
@@ -46,6 +47,10 @@ fetch_pdfs <- function(input,
   require(dplyr)
   require(cli)
   require(progress)
+  
+  # Resolve email once here — subfunctions will re-resolve but
+  # this gives early feedback to the user
+  email <- resolve_email(email)
   
   # Validate email
   if (email == "your@email.com") {
@@ -57,26 +62,21 @@ fetch_pdfs <- function(input,
     dir.create(output_folder, recursive = TRUE)
   }
   
-  # CASE 1: Input is a CSV file
+  # CASE 1: CSV file
   if (length(input) == 1 && file.exists(input) && grepl("\\.csv$", input, ignore.case = TRUE)) {
-    cli_alert_info("Detected CSV file input")
-    
     data <- read_csv(input, show_col_types = FALSE)
     
     if ("doi" %in% tolower(colnames(data))) {
-      cli_alert_info("Found DOI column - using fetch_pdfs_from_doi()")
-      fetch_pdfs_from_doi(input, output_folder, delay, email, timeout, 
-                          log_file, report_file, validate_pdfs, remove_invalid)
-      
+      fetch_pdfs_from_doi(input, output_folder, delay, email, timeout,
+                          log_file, report_file, validate_pdfs, remove_invalid,
+                          proxy)                                       # passed through
     } else if (any(c("pmid", "pubmed_id") %in% tolower(colnames(data)))) {
-      cli_alert_info("Found PMID column - using fetch_pdfs_from_pmids()")
-      fetch_pdfs_from_pmids(input, output_folder, delay, email, timeout, 
-                            log_file, report_file, validate_pdfs, remove_invalid)
-      
+      fetch_pdfs_from_pmids(input, output_folder, delay, email, timeout,
+                            log_file, report_file, validate_pdfs, remove_invalid,
+                            proxy)                                     # passed through
     } else {
       stop("CSV must contain a 'doi', 'pmid', or 'pubmed_id' column")
     }
-    
     return(invisible(NULL))
   }
   
@@ -105,12 +105,12 @@ fetch_pdfs <- function(input,
   if (length(dois) > 0) {
     temp_csv <- tempfile(fileext = ".csv")
     write_csv(data.frame(doi = dois), temp_csv)
-    tryCatch({
-      fetch_pdfs_from_doi(temp_csv, output_folder, delay, email, timeout, 
-                          log_file, report_file, validate_pdfs, remove_invalid)
-    }, error = function(e) {
-      unfetched <<- c(unfetched, dois)
-    })
+    tryCatch(
+      fetch_pdfs_from_doi(temp_csv, output_folder, delay, email, timeout,
+                          log_file, report_file, validate_pdfs, remove_invalid,
+                          proxy),                                      # passed through
+      error = function(e) unfetched <<- c(unfetched, dois)
+    )
     unlink(temp_csv)
   }
   
@@ -118,28 +118,27 @@ fetch_pdfs <- function(input,
   if (length(pmids) > 0) {
     temp_csv <- tempfile(fileext = ".csv")
     write_csv(data.frame(pmid = pmids), temp_csv)
-    tryCatch({
-      fetch_pdfs_from_pmids(temp_csv, output_folder, delay, email, timeout, 
-                            log_file, report_file, validate_pdfs, remove_invalid)
-    }, error = function(e) {
-      unfetched <<- c(unfetched, pmids)
-    })
+    tryCatch(
+      fetch_pdfs_from_pmids(temp_csv, output_folder, delay, email, timeout,
+                            log_file, report_file, validate_pdfs, remove_invalid,
+                            proxy),                                    # passed through
+      error = function(e) unfetched <<- c(unfetched, pmids)
+    )
     unlink(temp_csv)
   }
   
   # Process PMC IDs
   if (length(pmc_ids) > 0) {
-    cli_alert_info("Converting PMC IDs to PMIDs...")
     pmids_from_pmc <- convert_pmc_to_pmid(pmc_ids)
-    
     if (length(pmids_from_pmc) > 0) {
       temp_csv <- tempfile(fileext = ".csv")
       write_csv(data.frame(pmid = pmids_from_pmc), temp_csv)
-      tryCatch({
-        fetch_pdfs_from_pmids(temp_csv, output_folder, delay, email, timeout, log_file, report_file)
-      }, error = function(e) {
-        unfetched <<- c(unfetched, pmc_ids)
-      })
+      tryCatch(
+        fetch_pdfs_from_pmids(temp_csv, output_folder, delay, email, timeout,
+                              log_file, report_file, validate_pdfs, remove_invalid,
+                              proxy),                                  # passed through
+        error = function(e) unfetched <<- c(unfetched, pmc_ids)
+      )
       unlink(temp_csv)
     } else {
       unfetched <- c(unfetched, pmc_ids)

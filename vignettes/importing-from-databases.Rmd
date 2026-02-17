@@ -1,0 +1,136 @@
+---
+title: "Importing References from Multiple Databases"
+author: "Kaalindi Misra"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Importing References from Multiple Databases}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+This vignette covers how to export from each major database and import into `paperfetch` using `import_refs()`.
+
+------------------------------------------------------------------------
+
+## Exporting from Each Database
+
+### Web of Science
+
+1.  Run your search
+2.  Select all records → **Export** → **BibTeX**
+3.  Save as `wos_export.bib`
+
+### Scopus
+
+1.  Run your search
+2.  Select all records → **Export** → **RIS format**
+3.  Include all fields
+4.  Save as `scopus_export.ris`
+
+### Cochrane Library
+
+1.  Run your search in Cochrane Reviews or CENTRAL
+2.  **Export selected citations** → **Plain text**
+3.  Save as `cochrane_results.txt`
+
+### PubMed
+
+1.  Run your search
+2.  **Send to** → **File** → Format: **CSV**
+3.  Save as `pubmed_export.csv`
+
+### Embase / PsycINFO / CINAHL
+
+Use the **RIS** export format from your institution's interface.
+
+------------------------------------------------------------------------
+
+## Import and Deduplicate
+
+```{r import-basic}
+library(paperfetch)
+
+refs <- import_refs(
+  files = c(
+    "wos_export.bib",
+    "scopus_export.ris",
+    "cochrane_results.txt",
+    "pubmed_export.csv"
+  ),
+  match_by = "doi"
+)
+```
+
+### Deduplication Strategies
+
+```{r dedup-options}
+# By DOI — most precise, but misses records without DOIs
+refs <- import_refs(files, match_by = "doi")
+
+# By title — catches duplicates missing DOIs
+refs <- import_refs(files, match_by = "title")
+
+# By both — most thorough for mixed-quality exports
+refs <- import_refs(files, match_by = c("doi", "title"))
+
+# No deduplication — useful for auditing
+refs_raw <- import_refs(files, deduplicate = FALSE)
+cat("Before dedup:", nrow(refs_raw), "\n")
+cat("After dedup: ", nrow(refs),     "\n")
+```
+
+------------------------------------------------------------------------
+
+## Handling Missing DOIs
+
+Older papers and conference proceedings may lack DOIs:
+
+```{r missing-dois}
+# Check coverage
+n_with_doi    <- sum(!is.na(refs$doi))
+n_without_doi <- sum( is.na(refs$doi))
+cat(sprintf("With DOI: %d | Without DOI: %d\n", n_with_doi, n_without_doi))
+
+# Fetch by DOI where available
+fetch_pdfs(refs$doi[!is.na(refs$doi)], output_folder = "papers")
+
+# Fetch remaining by PMID (if available)
+if ("pmid" %in% colnames(refs)) {
+  missing_doi_with_pmid <- refs[is.na(refs$doi) & !is.na(refs$pmid), ]
+  fetch_pdfs(missing_doi_with_pmid$pmid, output_folder = "papers")
+}
+```
+
+------------------------------------------------------------------------
+
+## Inspecting Import Quality
+
+```{r inspect}
+# Check what columns were imported
+colnames(refs)
+
+# Spot-check a few records
+head(refs[, c("title", "doi", "year", "journal")], 10)
+
+# Check for suspiciously short DOIs or malformed entries
+suspect <- refs[!is.na(refs$doi) & nchar(refs$doi) < 8, ]
+if (nrow(suspect) > 0) {
+  message("Potentially malformed DOIs:")
+  print(suspect[, c("title", "doi")])
+}
+```
+
+------------------------------------------------------------------------
+
+## Session Info
+
+```{r session-info, eval = TRUE}
+sessionInfo()
+```

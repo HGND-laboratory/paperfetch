@@ -1,0 +1,302 @@
+---
+title: "Full Systematic Review Workflow with paperfetch"
+author: "Kaalindi Misra"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Full Systematic Review Workflow with paperfetch}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  eval     = FALSE   # Don't run during R CMD check (requires network)
+)
+```
+
+## Overview
+
+This vignette walks through a complete systematic review workflow using `paperfetch` — from importing results from multiple databases through to generating a PRISMA 2020 flow diagram.
+
+**Steps covered:**
+
+1.  Set up credentials
+2.  Import and deduplicate references from multiple databases
+3.  Fetch PDFs with automatic validation
+4.  Review the acquisition report
+5.  Extract PRISMA 2020 counts
+6.  Generate a PRISMA 2020 flow diagram
+7.  Handle failures
+
+------------------------------------------------------------------------
+
+## 1. Setup
+
+### Install paperfetch
+
+```{r install}
+install.packages("devtools")
+devtools::install_github("HGND-laboratory/paperfetch")
+```
+
+### Save your email in `.Renviron` (do this once)
+
+```{r renviron}
+usethis::edit_r_environ()
+```
+
+Add this line to the file that opens, then **restart R**:
+
+```         
+PAPERFETCH_EMAIL="yourname@institution.edu"
+```
+
+From this point, all `paperfetch` functions will pick up your email automatically. You never need to type it again.
+
+------------------------------------------------------------------------
+
+## 2. Import from Multiple Databases
+
+Export your search results from each database in the recommended format:
+
+| Database       | Format              |
+|----------------|---------------------|
+| Web of Science | BibTeX (`.bib`)     |
+| Scopus         | RIS (`.ris`)        |
+| Cochrane       | Plain text (`.txt`) |
+| PubMed         | CSV (`.csv`)        |
+
+Then import and deduplicate:
+
+```{r import}
+library(paperfetch)
+
+refs <- import_refs(
+  files    = c("wos_export.bib", "scopus_export.ris", "cochrane_results.txt"),
+  match_by = "doi",   # deduplicate by DOI (recommended)
+  verbose  = TRUE
+)
+```
+
+Console output:
+
+```         
+── Importing References ──────────────────────────────────────────────
+✔ Imported 412 records from wos_export.bib
+✔ Imported 287 records from scopus_export.ris
+✔ Imported 193 records from cochrane_results.txt
+ℹ Total records: 892
+── Deduplicating References ─────────────────────────────────────────
+✔ Unique records after deduplication: 654
+ℹ Duplicates removed: 238 (26.7%)
+── Checking Identifiers ─────────────────────────────────────────────
+✔ Records with doi: 601 / 654
+⚠ 53 records missing a doi
+```
+
+Write the deduplicated DOIs to CSV:
+
+```{r write-csv}
+write.csv(
+  data.frame(doi = refs$doi[!is.na(refs$doi)]),
+  "systematic_review/data/dois.csv",
+  row.names = FALSE
+)
+```
+
+------------------------------------------------------------------------
+
+## 3. Fetch PDFs
+
+Set up a project structure:
+
+```{r setup-dirs}
+dir.create("systematic_review/pdfs",    recursive = TRUE)
+dir.create("systematic_review/logs",    recursive = TRUE)
+dir.create("systematic_review/figures", recursive = TRUE)
+```
+
+Fetch PDFs with automatic validation:
+
+```{r fetch}
+fetch_pdfs_from_doi(
+  csv_file_path = "systematic_review/data/dois.csv",
+  output_folder = "systematic_review/pdfs",
+  log_file      = "systematic_review/logs/download_log.csv",
+  report_file   = "systematic_review/logs/acquisition_report.md",
+  delay         = 2
+  # email is picked up from .Renviron automatically
+  # validate_pdfs  = TRUE  (default)
+  # remove_invalid = TRUE  (default)
+)
+```
+
+**What happens automatically:**
+
+1.  For each DOI, `paperfetch` tries (in order):
+
+-   Unpaywall API (`best_oa_location` including PMC AWS)
+-   DOI resolution + `citation_pdf_url` meta tag
+-   HTML scraping for PDF links
+
+2.  After downloading, every file is validated:
+
+-   PDF magic number check (`%PDF-`)
+-   HTML error page detection
+-   File size check (minimum 10 KB)
+-   `%%EOF` marker check
+
+3.  Invalid files are removed and logged
+
+------------------------------------------------------------------------
+
+## 4. Review the Acquisition Report
+
+```{r view-report}
+file.show("systematic_review/logs/acquisition_report.md")
+```
+
+The report contains:
+
+-   **Summary** — total records, success rate, skipped files
+-   **Retrieval methods** — success rates per method
+-   **Failure analysis** — categorised failure reasons
+-   **Failed records** — complete ID lists by failure type
+-   **PDF integrity validation** — valid/invalid counts and reasons
+-   **PRISMA 2020 counts** — ready-to-use numbers for your flow diagram
+-   **Reproducibility information** — R version, parameters, data sources
+
+------------------------------------------------------------------------
+
+## 5. Extract PRISMA 2020 Counts
+
+```{r prisma-counts}
+prisma_stats <- as_prisma_counts("systematic_review/logs/download_log.csv")
+```
+
+Output:
+
+```         
+── PRISMA 2020 Full-Text Retrieval Counts ──────────────────────────
+Reports sought for retrieval:   528
+Reports not retrieved:          116
+Reports excluded (invalid PDF):  15
+Reports acquired:               397
+────────────────────────────────────────────────────────────────────
+```
+
+------------------------------------------------------------------------
+
+## 6. Generate PRISMA 2020 Flow Diagram
+
+```{r prisma-diagram}
+if (requireNamespace("PRISMA2020", quietly = TRUE)) {
+  plot_prisma_fulltext(
+    prisma_counts   = prisma_stats,
+    previous_counts = list(
+      database_results   = 892,   # Total from all databases (pre-dedup)
+      duplicates_removed = 238,   # Removed by import_refs()
+      records_screened   = 654,   # After deduplication
+      records_excluded   = 126    # Excluded at title/abstract screening
+    ),
+    save_path = "systematic_review/figures/prisma_diagram.png"
+  )
+}
+```
+
+------------------------------------------------------------------------
+
+## 7. Handle Failures
+
+After downloading, analyse failures from the log:
+
+```{r handle-failures}
+log <- read.csv("systematic_review/logs/download_log.csv")
+
+# Check overall success rate
+success_rate <- sum(log$success, na.rm = TRUE) / 
+  sum(log$status != "exists", na.rm = TRUE) * 100
+cat(sprintf("Success rate: %.1f%%\n", success_rate))
+
+# Export paywalled papers for library request
+paywalled <- log[grepl("paywalled|403", log$failure_reason, na.rm = TRUE), ]
+if (nrow(paywalled) > 0) {
+  write.csv(
+    paywalled[, "id", drop = FALSE],
+    "library_requests.csv",
+    row.names = FALSE
+  )
+  cat(sprintf("%d papers sent to library request list\n", nrow(paywalled)))
+}
+
+# Retry timeout failures with longer timeout
+timed_out <- log[grepl("timeout", log$failure_reason, na.rm = TRUE), ]
+if (nrow(timed_out) > 0) {
+  write.csv(
+    timed_out[, "id", drop = FALSE],
+    "retry.csv",
+    row.names = FALSE
+  )
+  fetch_pdfs("retry.csv", timeout = 30)
+}
+
+# Inspect invalid PDFs before removal
+if ("pdf_valid" %in% colnames(log)) {
+  invalid <- log[!is.na(log$pdf_valid) & !log$pdf_valid, ]
+  if (nrow(invalid) > 0) {
+    message(sprintf("%d invalid PDFs detected:\n", nrow(invalid)))
+    print(invalid[, c("id", "pdf_invalid_reason")])
+  }
+}
+```
+
+------------------------------------------------------------------------
+
+## 8. Optional: Advanced PDF Validation
+
+For extra confidence, run deep validation with `pdftools`:
+
+```{r advanced-validation}
+if (requireNamespace("pdftools", quietly = TRUE)) {
+  validate_pdfs_after_download(
+    output_folder = "systematic_review/pdfs",
+    log_file      = "systematic_review/logs/download_log.csv",
+    report_file   = "systematic_review/logs/acquisition_report.md",
+    use_advanced  = TRUE
+  )
+}
+```
+
+------------------------------------------------------------------------
+
+## 9. Pipe-Friendly Alternative
+
+For a more concise workflow:
+
+```{r pipe-workflow}
+# Import, deduplicate, and fetch in a single pipeline
+import_refs(
+  files    = c("wos_export.bib", "scopus_export.ris", "cochrane_results.txt"),
+  match_by = "doi"
+) |>
+  fetch_refs_pdfs(
+    output_folder = "systematic_review/pdfs",
+    log_file      = "systematic_review/logs/download_log.csv",
+    report_file   = "systematic_review/logs/acquisition_report.md"
+  )
+
+# Then generate PRISMA diagram
+as_prisma_counts("systematic_review/logs/download_log.csv") |>
+  plot_prisma_fulltext(save_path = "systematic_review/figures/prisma_diagram.png")
+```
+
+------------------------------------------------------------------------
+
+## Session Info
+
+```{r session-info, eval = TRUE}
+sessionInfo()
+```

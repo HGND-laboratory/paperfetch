@@ -1,0 +1,180 @@
+---
+title: "PRISMA 2020 Integration"
+author: "Kaalindi Misra"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{PRISMA 2020 Integration}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+`paperfetch` is the only PDF retrieval package that integrates directly with
+the PRISMA 2020 flow diagram. This vignette covers:
+
+1. What PRISMA counts `paperfetch` generates
+2. Extracting counts with `as_prisma_counts()`
+3. Generating flow diagrams with `plot_prisma_fulltext()`
+4. Building a full PRISMA diagram including all phases
+
+---
+
+## What paperfetch Logs
+
+Every download attempt is logged with the information needed for PRISMA
+reporting. The key columns are:
+
+| Column | PRISMA meaning |
+|--------|----------------|
+| `success == TRUE & pdf_valid == TRUE` | Reports acquired |
+| `success == FALSE` | Reports not retrieved |
+| `pdf_valid == FALSE` | Reports excluded (invalid PDF) |
+
+---
+
+## 1. Extract PRISMA Counts
+
+After fetching, extract counts directly from your log:
+```{r counts}
+library(paperfetch)
+
+prisma_stats <- as_prisma_counts("download_log.csv")
+print(prisma_stats)
+```
+
+Output:
+```
+── PRISMA 2020 Full-Text Retrieval Counts ──────────────
+  Reports sought for retrieval:   528
+  Reports not retrieved:          116
+  Reports excluded (invalid PDF):  15
+  Reports acquired:               397
+  ── Acquisition method breakdown ──
+  unpaywall:     267
+  pmc:            98
+  citation_meta:  34
+  scrape:         13
+  ── Failure reason breakdown ──
+  paywalled:      67
+  no_pdf_found:   31
+  timeout:        12
+  server_error:    6
+```
+
+You can also pass a data frame directly:
+```{r counts-df}
+log_df <- read.csv("download_log.csv")
+prisma_stats <- as_prisma_counts(log_df)
+```
+
+---
+
+## 2. Full-Text Retrieval Diagram Only
+
+If you only need the full-text retrieval section:
+```{r fulltext-only}
+if (requireNamespace("PRISMA2020", quietly = TRUE)) {
+  plot_prisma_fulltext(prisma_stats)
+}
+```
+
+---
+
+## 3. Complete PRISMA 2020 Diagram
+
+For a complete diagram including all phases, pass `previous_counts`
+with your earlier screening numbers:
+```{r full-diagram}
+if (requireNamespace("PRISMA2020", quietly = TRUE)) {
+  plot_prisma_fulltext(
+    prisma_counts   = prisma_stats,
+    previous_counts = list(
+      # Identification phase
+      database_results   = 892,   # From import_refs() pre-dedup total
+      register_results   = 45,    # From trial registers (if any)
+      
+      # Screening phase
+      duplicates_removed = 238,   # From import_refs() dedup count
+      records_screened   = 699,   # After deduplication
+      records_excluded   = 171    # Title/abstract exclusions
+    ),
+    save_path   = "figures/prisma_diagram.png",
+    interactive = FALSE
+  )
+}
+```
+
+### Save in different formats
+```{r save-formats}
+# PNG (for Word/PowerPoint)
+plot_prisma_fulltext(prisma_stats, save_path = "figures/prisma.png")
+
+# PDF (for LaTeX)
+plot_prisma_fulltext(prisma_stats, save_path = "figures/prisma.pdf")
+
+# SVG (scalable, for web)
+plot_prisma_fulltext(prisma_stats, save_path = "figures/prisma.svg")
+
+# Interactive (for review)
+plot_prisma_fulltext(prisma_stats, interactive = TRUE)
+```
+
+---
+
+## 4. Using Counts in Your Methods Section
+
+The acquisition report (`acquisition_report.md`) includes a pre-formatted
+PRISMA table ready for your manuscript. Open it with:
+```{r report}
+file.show("acquisition_report.md")
+```
+
+The relevant section looks like this:
+```markdown
+## PRISMA 2020 Full-Text Retrieval Counts
+
+| PRISMA 2020 Field              | Count |
+|--------------------------------|-------|
+| Reports sought for retrieval   |   528 |
+| Reports not retrieved          |   116 |
+| Reports excluded (invalid PDF) |    15 |
+| **Reports acquired**           | **397** |
+```
+
+---
+
+## 5. Connecting with import_refs()
+
+When using `import_refs()` for deduplication, the counts map like this:
+```{r import-prisma}
+# Import and record counts for PRISMA
+refs_raw    <- import_refs(files, deduplicate = FALSE, verbose = FALSE)
+refs_unique <- import_refs(files, deduplicate = TRUE,  verbose = FALSE)
+
+n_total_records    <- nrow(refs_raw)
+n_duplicates       <- nrow(refs_raw) - nrow(refs_unique)
+n_after_dedup      <- nrow(refs_unique)
+
+# Use these in previous_counts
+plot_prisma_fulltext(
+  prisma_counts   = as_prisma_counts("download_log.csv"),
+  previous_counts = list(
+    database_results   = n_total_records,
+    duplicates_removed = n_duplicates,
+    records_screened   = n_after_dedup
+  )
+)
+```
+
+---
+
+## Session Info
+```{r session-info, eval = TRUE}
+sessionInfo()
+```
+```

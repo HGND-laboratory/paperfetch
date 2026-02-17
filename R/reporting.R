@@ -208,7 +208,32 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
       report <- paste0(report, "---\n\n")
     }
   }
+  # ── PRISMA 2020 Counts ────────────────────────────────────────────────────────
   
+  prisma_counts <- as_prisma_counts(log_data, verbose = FALSE)
+  
+  report <- paste0(report,
+                   "## PRISMA 2020 Full-Text Retrieval Counts\n\n",
+                   "Copy these numbers directly into your PRISMA 2020 flow diagram:\n\n",
+                   "| PRISMA 2020 Field | Count |\n",
+                   "|-------------------|-------|\n",
+                   "| Reports sought for retrieval | ",
+                   prisma_counts$reports_sought_retrieval, " |\n",
+                   "| Reports not retrieved | ",
+                   prisma_counts$reports_not_retrieved, " |\n",
+                   "| Reports excluded (invalid PDF) | ",
+                   prisma_counts$reports_excluded_invalid, " |\n",
+                   "| **Reports acquired** | **",
+                   prisma_counts$reports_acquired, "** |\n\n",
+                   "```r\n",
+                   "# Generate PRISMA 2020 flow diagram\n",
+                   "library(paperfetch)\n",
+                   "library(PRISMA2020)\n\n",
+                   "prisma_stats <- as_prisma_counts(\"", log_file_name, "\")\n",
+                   "plot_prisma_fulltext(prisma_stats)\n",
+                   "```\n\n",
+                   "---\n\n"
+  )
   # ── Reproducibility Information ───────────────────────────────────────────────
   
   report <- paste0(report,
@@ -254,17 +279,3 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
   
   writeLines(report, report_file)
 }
-```
-
----
-  
-  The report now flows logically:
-  ```
-## Summary
-## Retrieval Methods
-## Failure Analysis
-## Failed Records
-## PDF Integrity Validation   ← NEW: right here, before reproducibility
-## Reproducibility Information
-## Recommendations
-## Citation
