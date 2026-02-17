@@ -2,7 +2,7 @@
 
 **The full-text acquisition layer for systematic reviews in R**
 
-`paperfetch` provides transparent, reproducible PDF retrieval for systematic reviews and meta-analyses. Unlike general-purpose scrapers, `paperfetch` generates **structured acquisition logs** and **PRISMA-compliant reports**, documenting every download attempt for your methods section.
+`paperfetch` provides transparent, reproducible PDF retrieval for systematic reviews and meta-analyses. Unlike general-purpose scrapers, `paperfetch` generates **structured acquisition logs**, **PRISMA-compliant reports**, and **validates every downloaded file** — documenting the entire process for your methods section.
 
 ---
 
@@ -10,10 +10,11 @@
 
 ### No other R package provides:
 
-✅ **Structured download logs** - Every attempt documented with timestamps, methods, and HTTP status  
-✅ **Reproducible acquisition reports** - Auto-generated Markdown reports for your manuscript  
-✅ **PRISMA compliance** - Evidence of systematic retrieval attempts for transparency  
-✅ **Multi-source fallback** - Unpaywall → PMC → DOI resolution → Citation scraping  
+✅ **Structured download logs** — Every attempt documented with timestamps, methods, and HTTP status  
+✅ **Reproducible acquisition reports** — Auto-generated Markdown reports for your manuscript  
+✅ **PDF integrity validation** — Detects HTML error pages and corrupt files disguised as PDFs  
+✅ **PRISMA compliance** — Evidence of systematic retrieval attempts for full transparency  
+✅ **Multi-source fallback** — Unpaywall → PMC → DOI resolution → Citation scraping  
 
 ### Perfect for:
 
@@ -24,17 +25,18 @@
 
 ---
 
-## Key Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
-| 📊 **Batch processing** | Download hundreds of papers with progress tracking |
+| 📊 **Batch processing** | Download hundreds of papers with progress tracking and ETA |
 | 📋 **Acquisition logging** | Structured CSV logs with timestamps, methods, HTTP status |
-| 📄 **Auto-generated reports** | PRISMA-compliant Markdown reports for manuscripts |
+| 📄 **Auto-generated reports** | PRISMA-compliant Markdown summaries for manuscripts |
+| 🔍 **PDF integrity validation** | Detects corrupt files and HTML error pages disguised as PDFs |
 | 🔄 **Smart caching** | Skips already-downloaded files to resume interrupted sessions |
 | ⏱️ **Timeout protection** | Configurable timeouts prevent hanging on slow servers |
-| 🧠 **Intelligent routing** | Auto-detects input type (DOI, PMID, PMC, CSV) |
-| 🎯 **Publication-ready** | Designed for reproducible research workflows |
+| 🧠 **Intelligent routing** | Auto-detects input type (DOI, PMID, PMC ID, or CSV) |
+| 🎯 **Consistent identity** | Honest User-Agent and Referer headers throughout |
 
 ---
 
@@ -44,13 +46,18 @@
 # Install devtools if you haven't already
 install.packages("devtools")
 
-# Install paperfetch package
-devtools::install_github("HGND-laboratory/paperfetch")
+# Install paperfetch
+devtools::install_github("misrak/paperfetch")
 ```
 
-**Dependencies:**
+**Core dependencies:**
 ```r
 install.packages(c("httr2", "rvest", "xml2", "readr", "dplyr", "cli", "progress"))
+```
+
+**Optional — for advanced PDF validation:**
+```r
+install.packages("pdftools")
 ```
 
 ---
@@ -60,167 +67,157 @@ install.packages(c("httr2", "rvest", "xml2", "readr", "dplyr", "cli", "progress"
 ```r
 library(paperfetch)
 
-# Automatic detection with full logging and reporting
+# Automatic detection — works with CSV files or vectors of IDs
 fetch_pdfs(
-  input = "my_references.csv", 
+  input = "my_references.csv",
   email = "you@institution.edu",
-  log_file = "download_log.csv",        # Structured acquisition log
-  report_file = "acquisition_report.md"  # PRISMA-ready report
+  log_file = "download_log.csv",
+  report_file = "acquisition_report.md"
 )
 ```
 
-### What you get:
+After completion you will have:
 
-1. ✅ **Downloaded PDFs** in `downloads/` folder
-2. 📋 **`download_log.csv`** - Complete acquisition audit trail
-3. 📄 **`acquisition_report.md`** - PRISMA-ready summary for your manuscript
+1. ✅ **Downloaded PDFs** in `downloads/`
+2. 📋 **`download_log.csv`** — Complete acquisition audit trail
+3. 📄 **`acquisition_report.md`** — PRISMA-ready summary for your manuscript
 
 ---
 
-## Example Output
+## Core Workflow
 
-After running `paperfetch`, you'll have everything needed for transparent reporting:
+This is the recommended workflow for systematic reviews:
 
-### 1. Downloaded PDFs
-```
-downloads/
-├── 10_1038_nature12373.pdf
-├── 10_1126_science_abc1234.pdf
-├── PMID_30670877.pdf
-└── ...
-```
+```r
+library(paperfetch)
 
-### 2. Structured Download Log (`download_log.csv`)
+# ── Step 1: Download with automatic validation ─────────────────────────────────
+# validate_pdfs = TRUE and remove_invalid = TRUE are on by default.
+# Invalid files (HTML error pages, corrupt PDFs, files < 10KB) are
+# detected, removed, and logged automatically.
 
-| id | id_type | timestamp | method | status | success | failure_reason | pdf_url | file_path | file_size_kb |
-|----|---------|-----------|--------|--------|---------|----------------|---------|-----------|--------------|
-| 10.1038/nature12373 | doi | 2025-02-16T14:23:45Z | unpaywall | 200 | TRUE | NA | https://nature.com/... | downloads/10_1038_nature12373.pdf | 2048.3 |
-| 10.1126/science.abc | doi | 2025-02-16T14:23:48Z | doi_resolution | 403 | FALSE | paywalled | https://science.org/... | NA | NA |
-| 30670877 | pmid | 2025-02-16T14:23:51Z | pmc | 200 | TRUE | NA | https://ncbi.nlm.nih.gov/... | downloads/PMID_30670877.pdf | 1536.7 |
+fetch_pdfs_from_doi(
+  csv_file_path = "systematic_review_dois.csv",
+  output_folder = "papers",
+  email         = "yourname@institution.edu",
+  delay         = 2,
+  log_file      = "download_log.csv",
+  report_file   = "acquisition_report.md"
+  # validate_pdfs  = TRUE  (default)
+  # remove_invalid = TRUE  (default)
+)
 
-### 3. Auto-Generated Acquisition Report (`acquisition_report.md`)
+# ── Step 2: Review the acquisition report ─────────────────────────────────────
+# Open the auto-generated PRISMA-compliant report.
+# Paste the relevant sections directly into your manuscript methods section.
 
-```markdown
-# Full-Text Acquisition Report
+file.show("acquisition_report.md")
 
-**Generated:** 2025-02-16 14:45:32  
-**Analyst:** yourname@institution.edu
+# ── Step 3 (Optional): Advanced validation with pdftools ──────────────────────
+# Performs deep validation: page count, text extraction, corruption checks.
+# Only runs if pdftools is installed.
 
-## Summary
-- **Total records:** 528
-- **Successfully downloaded:** 412 (78.0%)
-- **Failed to retrieve:** 116 (22.0%)
-
-## Retrieval Methods
-| Method | Attempts | Success | Success Rate |
-|--------|----------|---------|--------------|
-| Unpaywall API | 528 | 267 | 50.6% |
-| PubMed Central (PMC) | 143 | 98 | 68.5% |
-| DOI Resolution | 261 | 34 | 13.0% |
-| Citation Metadata Scraping | 118 | 13 | 11.0% |
-
-## Failure Analysis
-| Reason | Count | Percentage |
-|--------|-------|------------|
-| Paywalled (HTTP 403) | 67 | 57.8% |
-| No PDF found | 31 | 26.7% |
-| Timeout | 12 | 10.3% |
-
-[Full report includes failed DOI lists, reproducibility info, and recommendations]
+if (requireNamespace("pdftools", quietly = TRUE)) {
+  validate_pdfs_after_download(
+    output_folder = "papers",
+    log_file      = "download_log.csv",
+    report_file   = "acquisition_report.md",
+    email         = "yourname@institution.edu",
+    use_advanced  = TRUE
+  )
+}
 ```
 
 ---
 
 ## Main Functions
 
-All functions support **logging** and **reporting** for transparent, reproducible workflows:
+### `fetch_pdfs()` — Intelligent Wrapper (Recommended)
 
-### `fetch_pdfs()` - Intelligent Wrapper (Recommended)
-
-**Automatically detects input type and routes to the appropriate retrieval strategy.**
+Automatically detects input type (CSV, vector, single ID) and routes to the correct strategy.
 
 ```r
 fetch_pdfs(
-  input = "my_references.csv",       # CSV file, vector of IDs, or single ID
-  output_folder = "downloads",
-  delay = 2,
-  email = "yourname@institution.edu",
-  timeout = 15,
-  log_file = "download_log.csv",        # NEW: Structured logging
-  report_file = "acquisition_report.md", # NEW: Auto-generated report
-  unfetched_file = "unfetched.txt"
+  input          = "my_references.csv",  # CSV, vector of IDs, or single ID
+  output_folder  = "downloads",
+  delay          = 2,
+  email          = "yourname@institution.edu",
+  timeout        = 15,
+  log_file       = "download_log.csv",
+  report_file    = "acquisition_report.md",
+  unfetched_file = "unfetched.txt",
+  validate_pdfs  = TRUE,
+  remove_invalid = TRUE
 )
 ```
 
-**What it does:**
-- 📁 **CSV input**: Detects column type (`doi`, `pmid`, `pubmed_id`) and routes automatically
-- 🔢 **Vector input**: Classifies each ID (DOI/PMID/PMC) and processes by type
-- 🎯 **Single ID**: Detects type and fetches accordingly
-- 🔄 **PMC conversion**: Automatically converts PMC IDs to PMIDs using NCBI API
+**Input auto-detection:**
+
+- 📁 **CSV file** — Detects column type (`doi`, `pmid`, `pubmed_id`) and routes automatically
+- 🔢 **Vector of IDs** — Classifies each ID as DOI, PMID, or PMC and processes by type
+- 🎯 **Single ID** — Detects type and fetches accordingly
+- 🔄 **PMC IDs** — Automatically converted to PMIDs via NCBI API
 
 **Examples:**
 
 ```r
-# CSV file (auto-detects if it contains DOIs or PMIDs)
+# CSV file (column type auto-detected)
 fetch_pdfs("my_references.csv", email = "you@edu")
 
-# Vector of DOIs only
+# Vector of DOIs
 fetch_pdfs(
   c("10.1038/nature12373", "10.1126/science.1234567"),
   email = "you@edu"
 )
 
-# Mixed IDs (DOIs + PMIDs + PMC IDs all together!)
+# Mixed IDs — DOIs, PMIDs, and PMC IDs all at once
 fetch_pdfs(
   c("10.1038/nature12373", "30670877", "PMC5176308"),
   output_folder = "papers",
-  email = "you@edu",
-  log_file = "mixed_download_log.csv",
-  report_file = "mixed_acquisition_report.md"
+  email         = "you@edu",
+  log_file      = "download_log.csv",
+  report_file   = "acquisition_report.md"
 )
 
 # Single ID
 fetch_pdfs("10.1038/nature12373", email = "you@edu")
 ```
 
-**Arguments:**
-- `input`: CSV file path, vector of IDs, or single ID string
-- `output_folder`: Directory for saving PDFs (default: `"downloads"`)
-- `delay`: Seconds between requests (default: `2`)
-- `email`: Your email for API identification (**required**)
-- `timeout`: Maximum seconds per request (default: `15`)
-- `log_file`: Path for structured CSV log (default: `"download_log.csv"`)
-- `report_file`: Path for Markdown report (default: `"acquisition_report.md"`)
-- `unfetched_file`: Log file for simple failed ID list (default: `"unfetched.txt"`)
-
 ---
 
-### `fetch_pdfs_from_doi()` - DOI-Specific Batch Download
+### `fetch_pdfs_from_doi()` — DOI Batch Download
 
-**Optimized for systematic reviews with DOI lists.**
+Optimised for systematic reviews with DOI lists.
 
 ```r
 fetch_pdfs_from_doi(
-  csv_file_path = "systematic_review_dois.csv",
-  output_folder = "downloaded_papers",
-  delay = 2,
-  email = "yourname@institution.edu",
-  timeout = 15,
-  log_file = "doi_download_log.csv",
-  report_file = "doi_acquisition_report.md"
+  csv_file_path  = "systematic_review_dois.csv",
+  output_folder  = "downloaded_papers",
+  delay          = 2,
+  email          = "yourname@institution.edu",
+  timeout        = 15,
+  log_file       = "download_log.csv",
+  report_file    = "acquisition_report.md",
+  validate_pdfs  = TRUE,
+  remove_invalid = TRUE
 )
 ```
 
 **Arguments:**
-- `csv_file_path`: Path to CSV file containing a `doi` column
-- `output_folder`: Directory for saving PDFs (created if doesn't exist)
-- `delay`: Seconds to wait between requests (default: `2`)
-- `email`: Your email for Unpaywall API identification (**required**)
-- `timeout`: Maximum seconds to wait per request (default: `15`)
-- `log_file`: Path for structured CSV log (default: `"download_log.csv"`)
-- `report_file`: Path for Markdown report (default: `"acquisition_report.md"`)
 
-**CSV Format:**
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `csv_file_path` | — | Path to CSV with a `doi` column (**required**) |
+| `output_folder` | `"downloads"` | Directory for PDFs (created if missing) |
+| `delay` | `2` | Seconds between requests (be polite) |
+| `email` | — | Your email for Unpaywall API (**required**) |
+| `timeout` | `15` | Max seconds per request |
+| `log_file` | `"download_log.csv"` | Structured acquisition log |
+| `report_file` | `"acquisition_report.md"` | PRISMA-ready Markdown report |
+| `validate_pdfs` | `TRUE` | Validate every downloaded file |
+| `remove_invalid` | `TRUE` | Remove invalid files automatically |
+
+**CSV format:**
 ```csv
 doi
 10.1038/s41586-020-2649-2
@@ -228,39 +225,34 @@ doi
 10.1016/j.cell.2020.01.001
 ```
 
-**Retrieval Strategy:**
-1. ✅ **Unpaywall API** (fastest, ~50% success for OA papers) → Uses `best_oa_location` including PMC AWS
-2. ✅ **DOI resolution + citation metadata** → Checks `citation_pdf_url` meta tags
-3. ✅ **HTML scraping** → Searches for PDF links as last resort
+**Retrieval strategy (in order):**
+1. ✅ **Unpaywall API** — Uses `best_oa_location` including PMC AWS (~50% OA success)
+2. ✅ **Citation metadata** — Checks `citation_pdf_url` meta tag on publisher page
+3. ✅ **HTML scraping** — Searches for PDF links as last resort
 
 ---
 
-### `fetch_pdfs_from_pmids()` - PMID-Specific Batch Download
+### `fetch_pdfs_from_pmids()` — PMID Batch Download
 
-**Optimized for PubMed-based systematic reviews.**
+Optimised for PubMed-based systematic reviews.
 
 ```r
 fetch_pdfs_from_pmids(
-  csv_file_path = "pubmed_ids.csv",
-  output_folder = "papers",
-  delay = 2,
-  email = "yourname@institution.edu",
-  timeout = 15,
-  log_file = "pmid_download_log.csv",
-  report_file = "pmid_acquisition_report.md"
+  csv_file_path  = "pubmed_ids.csv",
+  output_folder  = "papers",
+  delay          = 2,
+  email          = "yourname@institution.edu",
+  timeout        = 15,
+  log_file       = "download_log.csv",
+  report_file    = "acquisition_report.md",
+  validate_pdfs  = TRUE,
+  remove_invalid = TRUE
 )
 ```
 
-**Arguments:**
-- `csv_file_path`: Path to CSV file containing a `pmid`, `PMID`, or `pubmed_id` column
-- `output_folder`: Directory for saving PDFs (created if doesn't exist)
-- `delay`: Seconds to wait between requests (default: `2`)
-- `email`: Your email for identification
-- `timeout`: Maximum seconds to wait per request (default: `15`)
-- `log_file`: Path for structured CSV log (default: `"download_log.csv"`)
-- `report_file`: Path for Markdown report (default: `"acquisition_report.md"`)
+**Arguments:** Same as `fetch_pdfs_from_doi()` but expects a `pmid`, `PMID`, or `pubmed_id` column.
 
-**CSV Format:**
+**CSV format:**
 ```csv
 pmid
 30670877
@@ -268,289 +260,257 @@ pmid
 31768060
 ```
 
-**Retrieval Strategy:**
-1. ✅ **Extract DOI from PubMed** → Use Unpaywall API if DOI found
-2. ✅ **PMC direct download** → If article has PMC ID, download from PubMed Central
-3. ✅ **Citation metadata** → Check `citation_pdf_url` on PubMed page
-4. ✅ **DOI resolution** → Follow DOI to publisher and scrape
-5. ✅ **HTML scraping** → Last resort fallback
+**Retrieval strategy (in order):**
+1. ✅ **Extract DOI from PubMed** → Unpaywall API
+2. ✅ **PMC direct download** — If a PMC ID is found, download directly from PubMed Central
+3. ✅ **Citation metadata** — Check `citation_pdf_url` on PubMed page
+4. ✅ **DOI resolution** — Follow DOI to publisher page and scrape
+5. ✅ **HTML scraping** — Last resort fallback
+
+---
+
+## PDF Integrity Validation
+
+Scrapers frequently encounter **soft failures** — files named `.pdf` that are actually HTML error pages or corrupt downloads. `paperfetch` catches these automatically.
+
+### What gets detected:
+
+| Invalid Type | Description |
+|-------------|-------------|
+| `html_error_page` | HTML "Access Denied" or "403 Forbidden" page disguised as PDF |
+| `file_too_small` | File under 10 KB — almost certainly an error response |
+| `missing_eof_marker` | Corrupt PDF missing the `%%EOF` marker |
+| `invalid_pdf_format` | File does not begin with `%PDF-` header |
+| `corrupted_pdf` | PDF is damaged and unreadable (advanced validation only) |
+| `password_protected` | PDF is password-protected (advanced validation only) |
+
+### How validation works:
+
+```r
+# Validation is ON by default — nothing extra needed
+fetch_pdfs_from_doi(
+  csv_file_path = "dois.csv",
+  output_folder = "papers",
+  email         = "you@edu"
+  # validate_pdfs  = TRUE  (default)
+  # remove_invalid = TRUE  (default)
+)
+
+# Console output during validation:
+# ══ Validating Downloaded PDFs ══════════════════════
+# ✔ Valid PDFs: 387
+# ✖ Invalid PDFs: 15
+# ℹ Failure reasons:
+#   - html_error_page: 12
+#   - file_too_small:  2
+#   - missing_eof_marker: 1
+# ⚠ Removing 15 invalid PDF files...
+```
+
+### Validation options:
+
+```r
+# Default: validate and remove invalid files
+fetch_pdfs_from_doi(..., validate_pdfs = TRUE, remove_invalid = TRUE)
+
+# Validate but keep invalid files for manual inspection
+fetch_pdfs_from_doi(..., validate_pdfs = TRUE, remove_invalid = FALSE)
+
+# Skip validation (faster, but not recommended for systematic reviews)
+fetch_pdfs_from_doi(..., validate_pdfs = FALSE)
+
+# Advanced validation with pdftools (checks page count and text extraction)
+if (requireNamespace("pdftools", quietly = TRUE)) {
+  validate_pdfs_after_download(
+    output_folder = "papers",
+    log_file      = "download_log.csv",
+    report_file   = "acquisition_report.md",
+    email         = "you@edu",
+    use_advanced  = TRUE
+  )
+}
+```
 
 ---
 
 ## Structured Download Logs
 
-Every download attempt is logged to `download_log.csv` with the following fields:
+Every attempt is logged to `download_log.csv`:
 
 | Field | Description | Example |
 |-------|-------------|---------|
 | `id` | DOI, PMID, or PMC ID | `10.1038/nature12373` |
 | `id_type` | Type of identifier | `doi`, `pmid`, `pmc` |
 | `timestamp` | ISO 8601 timestamp | `2025-02-16T14:23:45Z` |
-| `method` | Retrieval method attempted | `unpaywall`, `pmc`, `doi_resolution`, `scrape` |
-| `status` | HTTP status code | `200`, `404`, `403`, `timeout` |
+| `method` | Retrieval method used | `unpaywall`, `pmc`, `doi_resolution`, `scrape` |
+| `status` | HTTP status code | `200`, `403`, `404`, `timeout` |
 | `success` | Download succeeded | `TRUE`, `FALSE` |
-| `failure_reason` | Why it failed (if applicable) | `paywalled`, `no_pdf_found`, `timeout`, `http_403` |
-| `pdf_url` | Final PDF URL (if found) | `https://www.ncbi.nlm.nih.gov/pmc/...` |
-| `file_path` | Local file path | `downloads/10_1038_nature12373.pdf` |
-| `file_size_kb` | Downloaded file size in KB | `1024.5` |
-
-### Why this matters for systematic reviews:
-
-✅ **Reproducibility** - Other researchers can verify your retrieval process  
-✅ **Transparency** - Reviewers can see exactly what happened with each paper  
-✅ **Audit trail** - Document for ethics boards, funding agencies, journals  
-✅ **Troubleshooting** - Identify patterns in failures (e.g., specific publishers)  
+| `failure_reason` | Why it failed | `paywalled`, `no_pdf_found`, `timeout` |
+| `pdf_url` | Final PDF URL | `https://ncbi.nlm.nih.gov/pmc/...` |
+| `file_path` | Local file path | `papers/10_1038_nature12373.pdf` |
+| `file_size_kb` | File size in KB | `1024.5` |
+| `pdf_valid` | Passed integrity check | `TRUE`, `FALSE` |
+| `pdf_invalid_reason` | Why validation failed | `html_error_page` |
 
 ---
 
 ## Auto-Generated Acquisition Reports
 
-`paperfetch` generates **PRISMA-compliant Markdown reports** documenting your full-text retrieval process. These reports can be copied directly into your manuscript's methods section.
+`paperfetch` generates a **PRISMA-compliant Markdown report** after every download session. The report is structured for direct use in your manuscript's methods section.
 
-### Report Contents:
+### Report sections:
 
-1. **Summary Statistics**
-   - Total records processed
-   - Success/failure counts and percentages
-   - Already-existing files (skipped)
+```
+## Summary
+  Total records, success rate, skipped files
 
-2. **Retrieval Method Breakdown**
-   - Which methods were attempted (Unpaywall, PMC, DOI resolution, scraping)
-   - Success rates for each method
-   - Method-specific statistics
+## Retrieval Methods
+  Success rates per method (Unpaywall, PMC, DOI resolution, scraping)
 
-3. **Failure Analysis**
-   - Categorized failure reasons (paywalled, no PDF, timeout, server errors)
-   - Counts and percentages for each failure type
+## Failure Analysis
+  Categorised failure reasons with counts and percentages
 
-4. **Failed Records Lists**
-   - Complete lists of DOIs/PMIDs that failed
-   - Organized by failure reason for targeted follow-up
+## Failed Records
+  Full ID lists organised by failure type (paywalled, no PDF, technical)
 
-5. **Reproducibility Information**
-   - R version and system information
-   - paperfetch version
-   - All parameters used (email, delays, timeouts)
-   - Data sources accessed
+## PDF Integrity Validation       ← unique to paperfetch
+  Valid/invalid counts, invalid PDF breakdown, IDs requiring manual retrieval
 
-6. **Recommendations**
-   - Next steps for obtaining failed records
-   - Institutional library contact suggestions
+## Reproducibility Information
+  R version, paperfetch version, parameters, data sources
 
-### Example Report Excerpt:
+## Recommendations
+  Targeted next steps for each failure category
+
+## Citation
+  Ready-to-paste citation for your manuscript
+```
+
+### Example report excerpt:
 
 ```markdown
 # Full-Text Acquisition Report
 
-**Generated:** 2025-02-16 14:45:32  
-**Package:** paperfetch v0.1.0  
+**Generated:** 2025-02-16 14:45:32
+**Package:** paperfetch v0.1.0
 **Analyst:** yourname@institution.edu
 
----
-
 ## Summary
-
 - **Total records:** 528
-- **Successfully downloaded:** 412 (78.0%)
+- **Successfully downloaded:** 397 (75.2%)
 - **Failed to retrieve:** 116 (22.0%)
-- **Already existed (skipped):** 23 (4.4%)
+- **Already existed (skipped):** 15 (2.8%)
 
----
+## PDF Integrity Validation
+- **PDFs validated:** 412
+- **Valid PDFs:** 397 (96.4%)
+- **Invalid PDFs detected and removed:** 15 (3.6%)
 
-## Retrieval Methods
-
-| Method | Attempts | Success | Success Rate |
-|--------|----------|---------|--------------|
-| Unpaywall API | 528 | 267 | 50.6% |
-| PubMed Central (PMC) | 143 | 98 | 68.5% |
-| DOI Resolution | 261 | 34 | 13.0% |
-| Citation Metadata Scraping | 118 | 13 | 11.0% |
-
----
-
-## Failure Analysis
-
-| Reason | Count | Percentage |
-|--------|-------|------------|
-| Paywalled (HTTP 403) | 67 | 57.8% |
-| No PDF found | 31 | 26.7% |
-| Timeout | 12 | 10.3% |
-| Server error (HTTP 500) | 4 | 3.4% |
-| Other | 2 | 1.7% |
-
----
-
-## Failed Records
-
-### Paywalled Content (n=67)
-10.1016/j.cell.2020.01.001
-10.1126/science.abc1234
-10.1038/s41586-020-1234-5
-...
-
-*[Full lists provided in actual report]*
-
----
-
-## Recommendations for Failed Records
-
-1. **Paywalled content (n=67):** Request via institutional library or interlibrary loan
-2. **No PDF available (n=31):** Check if articles are HTML-only or contact authors
-3. **Technical failures (n=18):** Retry manually or contact publisher support
+### Invalid PDF Breakdown
+| Reason              | Count | Description                              |
+|---------------------|-------|------------------------------------------|
+| html_error_page     | 12    | HTML error page disguised as PDF         |
+| file_too_small      | 2     | File too small (likely an error response)|
+| missing_eof_marker  | 1     | Corrupt PDF missing %%EOF marker         |
 ```
----
-
-## Shared Features Across All Functions
-
-All `paperfetch` functions include:
-
-- ✅ **Progress bar with ETA** - See how long your download will take
-- ✅ **Skip existing files** - Resume interrupted downloads seamlessly
-- ✅ **Colored console alerts** - Clear success/failure/info messages
-  - 🟢 `✔ Downloaded: ...` (success)
-  - 🔴 `✖ No PDF found: ...` (failure)
-  - 🔵 `ℹ Skipped (exists): ...` (already downloaded)
-- ✅ **Structured logging** - CSV logs with timestamps, methods, status codes
-- ✅ **Auto-generated reports** - PRISMA-ready Markdown summaries
-- ✅ **Consistent User-Agent** - Honest identification for server compatibility
-- ✅ **Referer headers** - Prevents anti-bot blocks
-- ✅ **Automatic timeout handling** - Never hang on slow servers
-- ✅ **Retry logic** - Attempts multiple strategies before giving up
 
 ---
 
 ## Best Practices for Systematic Reviews
 
-### 1. **Prepare Your ID List**
-
-Export DOIs or PMIDs from your reference manager (Zotero, Mendeley, EndNote) or bibliographic database:
+### 1. Prepare your ID list
 
 ```r
-# Example: Extract DOIs from a BibTeX file
+# From a BibTeX file
 library(bib2df)
 refs <- bib2df("my_references.bib")
 write.csv(data.frame(doi = refs$DOI), "dois.csv", row.names = FALSE)
 
-# Example: Export from PubMed search
-# 1. Run your PubMed search
-# 2. Click "Send to" → "File" → "CSV"
-# 3. Save with PMID column
-
-# Example: From Zotero
-# 1. Select your collection
-# 2. File → Export Library → CSV format
-# 3. Ensure DOI or PMID column is present
+# From a PubMed export
+# PubMed → Send to → File → CSV → open in R
+pmids <- read.csv("pubmed_results.csv")
+write.csv(data.frame(pmid = pmids$PMID), "pmids.csv", row.names = FALSE)
 ```
 
-### 2. **Use Institutional Email**
+### 2. Use your institutional email
 
-Unpaywall requires a valid email and works better with institutional addresses:
-
-```r
-fetch_pdfs(
-  "dois.csv",
-  email = "j.smith@university.edu"  # Use your real institutional email
-)
-```
-
-### 3. **Respect Rate Limits**
-
-For large systematic reviews (>500 papers), increase the delay:
+Unpaywall requires a valid email and performs better with institutional addresses:
 
 ```r
-fetch_pdfs(
-  "large_review.csv",
+fetch_pdfs_from_doi(
+  csv_file_path = "dois.csv",
   output_folder = "papers",
-  delay = 3,  # 3 seconds between requests
-  email = "yourname@institution.edu"
+  email         = "j.smith@university.edu"
 )
 ```
 
-### 4. **Document Everything for PRISMA**
+### 3. Respect rate limits
 
-Save your logs and reports with your systematic review protocol:
+For large reviews (>500 papers) increase the delay:
 
 ```r
-# Organized workflow for PRISMA compliance
-fetch_pdfs(
-  input = "screening_included_studies.csv",
-  output_folder = "full_text_pdfs",
-  log_file = "PRISMA_full_text_retrieval_log.csv",
-  report_file = "PRISMA_full_text_retrieval_report.md",
-  email = "yourname@institution.edu"
+fetch_pdfs_from_doi(
+  csv_file_path = "large_review.csv",
+  output_folder = "papers",
+  delay         = 3,
+  email         = "yourname@institution.edu"
 )
-
-# Archive everything
-# full_text_pdfs/ → Your PDFs
-# PRISMA_full_text_retrieval_log.csv → Complete audit trail
-# PRISMA_full_text_retrieval_report.md → Methods section content
 ```
 
-### 5. **Handle Failures Systematically**
+### 4. Organise for PRISMA compliance
 
 ```r
-# After running paperfetch, analyze failures
+# Create a structured project
+dir.create("systematic_review/pdfs",  recursive = TRUE)
+dir.create("systematic_review/logs",  recursive = TRUE)
+dir.create("systematic_review/data",  recursive = TRUE)
+
+# Download with full logging
+fetch_pdfs_from_doi(
+  csv_file_path = "systematic_review/data/dois.csv",
+  output_folder = "systematic_review/pdfs",
+  log_file      = "systematic_review/logs/download_log.csv",
+  report_file   = "systematic_review/logs/acquisition_report.md",
+  email         = "yourname@institution.edu"
+)
+
+# Review and archive the report
+file.show("systematic_review/logs/acquisition_report.md")
+```
+
+### 5. Handle failures systematically
+
+```r
+# Read the log to analyse failures
 log <- read.csv("download_log.csv")
 
-# Count by failure reason
-table(log$failure_reason[!log$success])
-
 # Export paywalled papers for library request
-paywalled <- log$id[grepl("403|paywalled", log$failure_reason)]
-write.csv(data.frame(doi = paywalled), "library_request.csv", row.names = FALSE)
+paywalled <- log[grepl("paywalled|403", log$failure_reason), ]
+write.csv(paywalled["id"], "library_requests.csv", row.names = FALSE)
 
-# Retry technical failures after a day
-technical_failures <- log$id[grepl("timeout|500", log$failure_reason)]
-write.csv(data.frame(doi = technical_failures), "retry_tomorrow.csv", row.names = FALSE)
-```
+# Retry timeout failures
+timed_out <- log[grepl("timeout", log$failure_reason), ]
+write.csv(timed_out["id"], "retry.csv", row.names = FALSE)
+fetch_pdfs("retry.csv", email = "you@edu", timeout = 30)
 
-### 6. **Complete Workflow Example**
-
-```r
-# Step 1: Create project structure
-dir.create("systematic_review")
-dir.create("systematic_review/pdfs")
-dir.create("systematic_review/logs")
-dir.create("systematic_review/data")
-
-# Step 2: Prepare ID list
-write.csv(my_dois, "systematic_review/data/dois.csv", row.names = FALSE)
-
-# Step 3: Fetch PDFs with full logging
-fetch_pdfs(
-  input = "systematic_review/data/dois.csv",
-  output_folder = "systematic_review/pdfs",
-  log_file = "systematic_review/logs/download_log.csv",
-  report_file = "systematic_review/logs/acquisition_report.md",
-  email = "yourname@institution.edu"
-)
-
-# Step 4: Analyze results
-log <- read.csv("systematic_review/logs/download_log.csv")
-success_rate <- sum(log$success) / nrow(log) * 100
-cat(sprintf("Success rate: %.1f%%\n", success_rate))
-
-# Step 5: Review the auto-generated report
-file.show("systematic_review/logs/acquisition_report.md")
-
-# Step 6: Copy report content into your manuscript's methods section
+# Inspect invalid PDFs before removal
+if (any(!log$pdf_valid, na.rm = TRUE)) {
+  invalid <- log[!is.na(log$pdf_valid) & !log$pdf_valid, ]
+  View(invalid)
+}
 ```
 
 ---
 
-## Function Comparison Guide
+## Function Comparison
 
-| Scenario | Recommended Function | Why |
-|----------|---------------------|-----|
-| Mixed IDs (DOIs + PMIDs + PMC) | `fetch_pdfs()` | Auto-detects and routes |
-| CSV with unknown column type | `fetch_pdfs()` | Auto-detects column |
-| Single ID of any type | `fetch_pdfs()` | Auto-detects ID type |
-| Pure DOI list (CSV) | `fetch_pdfs_from_doi()` | Slightly faster (no detection) |
-| Pure PMID list (CSV) | `fetch_pdfs_from_pmids()` | Slightly faster (no detection) |
-| Large systematic review (>1000) | Specific function | More control, better performance |
-| Need detailed logging | Any function | All support logging/reporting |
-
-**General rule**: Use `fetch_pdfs()` for convenience, use specific functions for large-scale performance.
+| Scenario | Recommended | Why |
+|----------|------------|-----|
+| Mixed IDs or unknown input | `fetch_pdfs()` | Auto-detects and routes |
+| CSV with DOIs | `fetch_pdfs_from_doi()` | Slightly faster, more explicit |
+| CSV with PMIDs | `fetch_pdfs_from_pmids()` | Slightly faster, more explicit |
+| Large review (>1000 papers) | Specific function | More control over parameters |
+| Post-download deep check | `validate_pdfs_after_download()` | pdftools-based deep validation |
 
 ---
 
@@ -558,166 +518,81 @@ file.show("systematic_review/logs/acquisition_report.md")
 
 ⚖️ **This package is designed for legal academic use:**
 
-- ✅ Download papers you have **legitimate access to** (subscriptions, open access)
+- ✅ Download papers you have **legitimate access to** (open access, subscriptions)
 - ✅ Use for **personal research, systematic reviews, meta-analyses**
 - ✅ Respect **publishers' Terms of Service**
-- ✅ Rate-limit requests (default 2-second delays)
-- ❌ Do NOT mass-download paywalled content you don't have rights to access
-- ❌ Do NOT redistribute copyrighted PDFs publicly
-- ❌ Do NOT circumvent authentication systems
+- ✅ Rate-limit all requests (default 2-second delay)
+- ❌ Do NOT download paywalled content you have no right to access
+- ❌ Do NOT redistribute copyrighted PDFs
 
-**The package identifies itself honestly** as an academic scraper with your contact email. Most publishers permit automated retrieval for legitimate research purposes when done respectfully (rate-limited, identified).
-
-### Legal Notice
-
-Users are responsible for ensuring their use of `paperfetch` complies with:
-- Publishers' Terms of Service
-- Institutional policies
-- Copyright laws in their jurisdiction
-- Open access licenses (CC-BY, CC-BY-NC, etc.)
-
-`paperfetch` facilitates access to content you already have rights to access—it does not grant additional rights.
+`paperfetch` identifies itself honestly as an academic scraper with your contact email. Most publishers permit automated retrieval for legitimate research when done respectfully.
 
 ---
 
 ## Troubleshooting
 
-### "No PDF found" for Open Access Papers
-- Verify the DOI/PMID is correct (typos are common)
-- Check if the paper is truly open access (some "free to read" ≠ downloadable PDF)
-- Some publishers block automated access even for OA content
-- Try accessing the paper manually in a browser first
-- Check the `download_log.csv` for specific failure reasons
+### Low success rate
+- Verify your DOI/PMID list for typos or malformed IDs
+- Many failures are expected for paywalled content — use your library for these
+- Review `acquisition_report.md` for failure patterns
+- Try increasing `timeout` for slow publishers
 
-### Timeouts on Slow Servers
-Increase the timeout parameter:
+### High rate of invalid PDFs
+- Common with Elsevier and Wiley — aggressive anti-bot measures return HTML pages
+- Check `pdf_invalid_reason` column in `download_log.csv`
+- Set `remove_invalid = FALSE` to inspect files before deletion
+
+### Timeouts
 ```r
-fetch_pdfs(..., timeout = 30)  # Increase to 30 seconds
+fetch_pdfs_from_doi(..., timeout = 30)
 ```
 
-### Inconsistent Download Success
-- Check your internet connection
-- Some journals (e.g., Elsevier, Wiley) have aggressive anti-bot measures
-- Try reducing batch size and increasing delay
-- Consider running downloads during off-peak hours (late night/weekend)
-- Check if your institution's firewall is blocking requests
-
-### CSV File Not Found
-Ensure your CSV path is correct:
+### CSV column not found
 ```r
-# Check if file exists
-file.exists("my_dois.csv")
+# Check column names
+colnames(read.csv("my_file.csv"))
 
 # Use absolute path if needed
-fetch_pdfs(
-  input = "C:/Users/YourName/Documents/my_dois.csv",
-  email = "you@edu"
-)
-
-# Or use file.choose() interactively
-fetch_pdfs(
-  input = file.choose(),
-  email = "you@edu"
-)
+fetch_pdfs(input = file.choose(), email = "you@edu")
 ```
 
-### "Please provide your real email address" Warning
-The wrapper function reminds you to use a real email:
+### "Please provide your real email" warning
 ```r
-# Wrong (triggers warning)
-fetch_pdfs("dois.csv")  # Uses default "your@email.com"
-
-# Correct
+# Always pass your real institutional email
 fetch_pdfs("dois.csv", email = "j.smith@university.edu")
 ```
-
-### Low Success Rates (<40%)
-- Check your DOI/PMID list for errors (malformed IDs)
-- Verify papers are published (not just preprints or in-press)
-- Many failures expected for paywalled content—this is normal
-- Review `acquisition_report.md` for failure patterns
-- Contact your institutional library for paywalled papers
-
-### Download Log Shows "NA" for Methods
-This indicates the download attempt failed before any method could be tried:
-- Usually means invalid DOI/PMID format
-- Could be network connectivity issues
-- Check the `failure_reason` column for details
 
 ---
 
 ## Advanced Usage
 
-### Custom Logging Paths
-
-Organize logs by project or date:
+### Parallel downloads for large reviews
 
 ```r
-timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-
-fetch_pdfs(
-  "dois.csv",
-  email = "you@edu",
-  log_file = paste0("logs/download_", timestamp, ".csv"),
-  report_file = paste0("reports/acquisition_", timestamp, ".md")
-)
-```
-
-### Parallel Downloads
-
-For very large systematic reviews, split your CSV and run multiple R sessions:
-
-```r
-# Split into chunks
 library(dplyr)
-dois <- read.csv("all_dois.csv")
-chunks <- split(dois, (seq(nrow(dois)) - 1) %/% 100)  # 100 DOIs per chunk
 
-# Save chunks
+# Split into chunks of 100
+dois <- read.csv("all_dois.csv")
+chunks <- split(dois, (seq(nrow(dois)) - 1) %/% 100)
+
 for (i in seq_along(chunks)) {
   write.csv(chunks[[i]], paste0("chunk_", i, ".csv"), row.names = FALSE)
 }
 
-# Run each chunk in separate R sessions (different terminals/RStudio instances)
-# Session 1:
-fetch_pdfs("chunk_1.csv", output_folder = "papers", 
-           log_file = "log_chunk1.csv", email = "you@edu")
-# Session 2:
-fetch_pdfs("chunk_2.csv", output_folder = "papers",
-           log_file = "log_chunk2.csv", email = "you@edu")
-# Session 3:
-fetch_pdfs("chunk_3.csv", output_folder = "papers",
-           log_file = "log_chunk3.csv", email = "you@edu")
+# Run in separate R sessions or terminals
+# Session 1: fetch_pdfs("chunk_1.csv", output_folder = "papers", email = "you@edu")
+# Session 2: fetch_pdfs("chunk_2.csv", output_folder = "papers", email = "you@edu")
+# ...
 
-# Merge logs afterward
+# Merge logs afterwards
 library(dplyr)
-all_logs <- list.files(pattern = "log_chunk.*\\.csv", full.names = TRUE) %>%
+merged_log <- list.files(pattern = "download_log_chunk.*\\.csv") %>%
   lapply(read.csv) %>%
   bind_rows()
-write.csv(all_logs, "complete_download_log.csv", row.names = FALSE)
+write.csv(merged_log, "complete_download_log.csv", row.names = FALSE)
 ```
 
-### Programmatic Access to Results
-
-The wrapper function returns a summary:
-
-```r
-results <- fetch_pdfs(my_ids, email = "you@edu")
-
-# Returns:
-# $total - Total number of IDs processed
-# $successful - Number of successful downloads
-# $failed - Number of failed downloads
-
-cat(sprintf("Downloaded %d/%d papers (%.1f%% success)\n", 
-            results$successful, 
-            results$total,
-            results$successful / results$total * 100))
-```
-
-### Integration with `targets` Pipeline
-
-Use `paperfetch` in reproducible workflows:
+### Integration with `targets` pipelines
 
 ```r
 # _targets.R
@@ -725,32 +600,24 @@ library(targets)
 library(paperfetch)
 
 tar_plan(
-  # Step 1: Define DOI list
-  tar_target(doi_list, read.csv("data/dois.csv")),
-  
-  # Step 2: Fetch PDFs
+  tar_target(doi_csv, "data/dois.csv", format = "file"),
+
   tar_target(
-    pdf_download,
-    fetch_pdfs(
-      "data/dois.csv",
+    pdf_downloads,
+    fetch_pdfs_from_doi(
+      csv_file_path = doi_csv,
       output_folder = "pdfs",
-      log_file = "logs/download_log.csv",
-      report_file = "reports/acquisition_report.md",
-      email = "you@edu"
+      log_file      = "logs/download_log.csv",
+      report_file   = "logs/acquisition_report.md",
+      email         = "you@edu"
     )
   ),
-  
-  # Step 3: Analyze download log
+
   tar_target(download_log, read.csv("logs/download_log.csv")),
-  
-  # Step 4: Generate summary
+
   tar_target(
-    download_summary,
-    data.frame(
-      total = nrow(download_log),
-      successful = sum(download_log$success),
-      success_rate = sum(download_log$success) / nrow(download_log)
-    )
+    success_rate,
+    sum(download_log$success) / nrow(download_log) * 100
   )
 )
 ```
@@ -759,56 +626,46 @@ tar_plan(
 
 ## Contributing
 
-We welcome contributions! This package is under active development for the scientific community.
+Contributions are welcome! `paperfetch` is under active development for the scientific community.
 
-**How to contribute:**
-1. Fork the repository: https://github.com/HGND-laboratory/paperfetch
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
+1. Fork the repository: https://github.com/misrak/paperfetch
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes (`git commit -m 'Add my feature'`)
+4. Push to the branch (`git push origin feature/my-feature`)
 5. Open a Pull Request
 
 **Priority areas:**
-- 🔧 Additional publisher-specific scrapers (Springer, Nature, Cell Press)
-- 📚 Support for arXiv IDs and bioRxiv DOIs
-- 🤖 CAPTCHA handling strategies
-- 🏛️ Institutional repository support (university repositories)
-- 🔄 Better error recovery and retry logic
-- ✅ PDF validation (ensure downloaded files are valid PDFs)
-- 📊 Enhanced reporting (e.g., plots, HTML reports)
-- 🧪 Unit tests and integration tests
+- Publisher-specific scrapers (Springer, Wiley, Taylor & Francis)
+- Support for arXiv and bioRxiv preprints
+- HTML report output (optional via `rmarkdown`)
+- PDF metadata extraction and verification
+- Institutional repository support
 
-**Found a bug?** Open an issue with:
-- Your R version (`sessionInfo()`)
-- Example IDs that failed
-- Error messages from console
-- Relevant log file entries
+**Bug reports** should include your R version (`sessionInfo()`), the IDs that failed, error messages, and relevant rows from `download_log.csv`.
 
 ---
 
 ## Roadmap
 
-**Version 0.1.0 (Current):**
-- ✅ Intelligent wrapper function with auto-detection
-- ✅ DOI and PMID batch downloading
-- ✅ PMC ID to PMID conversion
-- ✅ Structured logging with CSV output
-- ✅ Auto-generated PRISMA-compliant reports
-- ✅ Multi-source fallback (Unpaywall, PMC, DOI, scraping)
+**v0.1.0 (Current)**
+- ✅ `fetch_pdfs()` intelligent wrapper
+- ✅ `fetch_pdfs_from_doi()` and `fetch_pdfs_from_pmids()`
+- ✅ Structured CSV logging
+- ✅ PRISMA-compliant Markdown reports
+- ✅ PDF integrity validation (basic and advanced)
+- ✅ PMC ID → PMID conversion
 
-**Version 0.2.0 (Planned - Q2 2025):**
-- [ ] Support for arXiv and bioRxiv preprints
-- [ ] Enhanced reporting with HTML output and plots
-- [ ] Parallel download support (built-in)
-- [ ] PDF validation and metadata extraction
+**v0.2.0 (Planned)**
+- [ ] arXiv and bioRxiv support
+- [ ] Optional interactive HTML reports
+- [ ] Built-in parallel downloads
 - [ ] Retry mechanism for failed downloads
 
-**Version 0.3.0 (Planned - Q3 2025):**
-- [ ] Integration with reference managers (Zotero API, Mendeley)
-- [ ] Support for institutional repositories
-- [ ] CAPTCHA detection and handling
+**v0.3.0 (Planned)**
+- [ ] Zotero API integration
+- [ ] Institutional repository support
 - [ ] Shiny GUI for non-R users
-- [ ] Publisher-specific optimizations (Elsevier, Springer, Wiley)
+- [ ] Publisher-specific optimisations
 
 ---
 
@@ -817,38 +674,46 @@ We welcome contributions! This package is under active development for the scien
 ```
 paperfetch/
 ├── R/
-│   ├── fetch_pdfs.R                # Intelligent wrapper function
-│   ├── fetch_pdfs_from_doi.R       # DOI-specific function
-│   ├── fetch_pdfs_from_pmids.R     # PMID-specific function
-│   ├── logging.R                   # Log entry creation functions
-│   ├── reporting.R                 # Report generation (generate_acquisition_report)
-│   └── utils.R                     # Helper functions (classify_id, convert_pmc_to_pmid)
-├── man/                            # Function documentation
-├── tests/                          # Unit tests
-│   └── testthat/
+│   ├── fetch_pdfs.R                # Intelligent wrapper
+│   ├── fetch_pdfs_from_doi.R       # DOI batch download
+│   ├── fetch_pdfs_from_pmids.R     # PMID batch download
+│   ├── pdf_validation.R            # Integrity validation
+│   ├── reporting.R                 # Report generation
+│   └── utils.R                     # classify_id, convert_pmc_to_pmid, create_log_entry
+├── man/                            # roxygen2 documentation
+├── tests/testthat/                 # Unit tests
 ├── vignettes/
-│   └── systematic_review_workflow.Rmd  # Tutorial
-├── DESCRIPTION                     # Package metadata
-├── NAMESPACE                       # Exported functions
-├── LICENSE                         # MIT License
-└── README.md                       # This file
+│   └── systematic_review_workflow.Rmd
+├── DESCRIPTION
+├── NAMESPACE
+├── LICENSE
+└── README.md
+```
+
+---
+
+## Citation
+
+```
+paperfetch: The full-text acquisition layer for systematic reviews in R.
+R package version 0.1.0. https://github.com/HGND-laboratory/paperfetch
+```
+
+```bibtex
+@Manual{paperfetch,
+  title  = {paperfetch: The full-text acquisition layer for systematic reviews in R},
+  author = {Kaalindi Misra},
+  year   = {2025},
+  note   = {R package version 0.1.0},
+  url    = {https://github.com/HGND-laboratory/paperfetch}
+}
 ```
 
 ---
 
 ## License
 
-MIT License - see `LICENSE` file for details.
-
-This means you can:
-- ✅ Use commercially
-- ✅ Modify
-- ✅ Distribute
-- ✅ Use privately
-
-With conditions:
-- Include original license
-- Include copyright notice
+MIT — see `LICENSE` for details.
 
 ---
 
@@ -859,79 +724,14 @@ With conditions:
 **GitHub:** https://github.com/HGND-laboratory/paperfetch  
 **Issues:** https://github.com/HGND-laboratory/paperfetch/issues
 
-For questions or support:
-1. Check the [troubleshooting section](#troubleshooting)
-2. Search [existing issues](https://github.com/HGND-laboratory/paperfetch/issues)
-3. Open a new issue with details
-
-For bug reports, please include:
-- Your R version (`sessionInfo()`)
-- Example IDs that failed
-- Error messages from console
-- Contents of `download_log.csv` (relevant rows)
-- Operating system
-
 ---
 
 ## Acknowledgments
 
-Built with:
-- [httr2](https://httr2.r-lib.org/) - Modern HTTP client for R
-- [rvest](https://rvest.tidyverse.org/) - Web scraping framework
-- [xml2](https://xml2.r-lib.org/) - XML and HTML parsing
-- [cli](https://cli.r-lib.org/) - Beautiful console output
-- [progress](https://github.com/r-lib/progress) - Progress bars
-
-Data sources:
-- [Unpaywall](https://unpaywall.org/) - Open access discovery API (thank you!)
-- [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/) - PubMed/PMC APIs
-- [PubMed Central](https://www.ncbi.nlm.nih.gov/pmc/) - Open access repository
-
-Special thanks to:
-- The open science community for making research more accessible
-- All contributors who help improve this package
-- Systematic review researchers who provided feedback on logging needs
-- PRISMA developers for transparency standards
+Built with [httr2](https://httr2.r-lib.org/), [rvest](https://rvest.tidyverse.org/), [xml2](https://xml2.r-lib.org/), [cli](https://cli.r-lib.org/), and [progress](https://github.com/r-lib/progress).  
+Data sources: [Unpaywall](https://unpaywall.org), [PubMed Central](https://www.ncbi.nlm.nih.gov/pmc/), and [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/).
 
 ---
 
-## Frequently Asked Questions
-
-**Q: Why are some open access papers not downloading?**  
-A: Not all "open access" papers have downloadable PDFs. Some are "read online only" or behind soft paywalls. The package tries Unpaywall, PMC, and scraping, but some publishers restrict automated access even for OA content.
-
-**Q: Can I download paywalled papers if my institution has access?**  
-A: Not automatically. The package doesn't handle institutional authentication (proxy/VPN). Download those papers manually through your library portal.
-
-**Q: How fast can I download papers without getting blocked?**  
-A: We recommend `delay = 2` seconds (default). For publishers with strict limits (Elsevier, Wiley), increase to `delay = 3` or `delay = 5`.
-
-**Q: What success rate should I expect?**  
-A: **Open access papers:** 60-80%. **Mixed (OA + paywalled):** 30-50%. **Purely paywalled:** <10%. Use your institution's library for the rest.
-
-**Q: Can I use this for commercial purposes?**  
-A: The package is MIT licensed (yes), but downloading copyrighted content for commercial use may violate publishers' ToS. Consult a lawyer.
-
-**Q: How is paperfetch different from other PDF scrapers?**  
-A: `paperfetch` is the only R package designed specifically for systematic reviews, with structured logging, PRISMA-compliant reports, and transparent audit trails. Other tools are general-purpose scrapers without reproducibility features.
-
-**Q: Does paperfetch work with preprints?**  
-A: Partial support. Works with DOIs from arXiv and bioRxiv if they resolve to PDFs. Full native support planned for v0.2.0.
-
-**Q: Can I contribute publisher-specific scrapers?**  
-A: Yes! We especially need help with Springer, Wiley, Taylor & Francis, and SAGE. See the [Contributing](#contributing) section.
-
-**Q: How do I report bugs or request features?**  
-A: Open an issue on [GitHub](https://github.com/misrak/paperfetch/issues) with details.
-
----
-
-**⭐ Star this repo if `paperfetch` helps your research!**
-
-**📢 Share with colleagues doing systematic reviews!**
-
-**🐛 Report bugs and request features on GitHub!**
-
----
-
-**paperfetch** - Making systematic reviews more transparent, reproducible, and efficient.
+**⭐ Star this repo if `paperfetch` helps your research!**  
+**📢 Share with colleagues running systematic reviews!**

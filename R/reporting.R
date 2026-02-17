@@ -1,13 +1,3 @@
-#' Generate Acquisition Report
-#'
-#' Creates a PRISMA-compliant Markdown report from download log data
-#'
-#' @param log_data Data frame with download log entries
-#' @param report_file Path for output Markdown file
-#' @param email Email used for downloads
-#' @param id_type Type of IDs processed ("doi", "pmid", or "mixed")
-#' @keywords internal
-
 generate_acquisition_report <- function(log_data, report_file, email, id_type = "mixed") {
   require(dplyr)
   
@@ -18,7 +8,7 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
   failed <- total - successful - skipped
   success_rate <- if (total > 0) (successful / (total - skipped)) * 100 else 0
   
-  # Method breakdown (exclude skipped)
+  # Method breakdown
   method_summary <- log_data %>%
     filter(status != "exists") %>%
     group_by(method) %>%
@@ -51,22 +41,29 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
     filter(grepl("timeout|500|error", failure_reason, ignore.case = TRUE)) %>% 
     pull(id)
   
-  # Build report
+  # ── Build report ──────────────────────────────────────────────────────────────
+  
   report <- paste0(
     "# Full-Text Acquisition Report\n\n",
     "**Generated:** ", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n",
     "**Package:** paperfetch v0.1.0\n",
     "**Analyst:** ", email, "\n\n",
-    "---\n\n",
-    "## Summary\n\n",
-    "- **Total records:** ", total, "\n",
-    "- **Successfully downloaded:** ", successful, " (", sprintf("%.1f%%", success_rate), ")\n",
-    "- **Failed to retrieve:** ", failed, " (", sprintf("%.1f%%", (failed / total) * 100), ")\n",
-    if (skipped > 0) paste0("- **Already existed (skipped):** ", skipped, " (", sprintf("%.1f%%", (skipped / total) * 100), ")\n") else "",
-    "\n---\n\n"
+    "---\n\n"
   )
   
-  # Retrieval Methods section
+  # ── Summary ───────────────────────────────────────────────────────────────────
+  
+  report <- paste0(report,
+                   "## Summary\n\n",
+                   "- **Total records:** ", total, "\n",
+                   "- **Successfully downloaded:** ", successful, " (", sprintf("%.1f%%", success_rate), ")\n",
+                   "- **Failed to retrieve:** ", failed, " (", sprintf("%.1f%%", (failed / total) * 100), ")\n",
+                   if (skipped > 0) paste0("- **Already existed (skipped):** ", skipped, " (", sprintf("%.1f%%", (skipped / total) * 100), ")\n") else "",
+                   "\n---\n\n"
+  )
+  
+  # ── Retrieval Methods ─────────────────────────────────────────────────────────
+  
   if (nrow(method_summary) > 0) {
     report <- paste0(report,
                      "## Retrieval Methods\n\n",
@@ -86,7 +83,8 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
     report <- paste0(report, "\n---\n\n")
   }
   
-  # Failure Analysis section
+  # ── Failure Analysis ──────────────────────────────────────────────────────────
+  
   if (nrow(failure_summary) > 0) {
     report <- paste0(report,
                      "## Failure Analysis\n\n",
@@ -105,7 +103,8 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
     report <- paste0(report, "\n---\n\n")
   }
   
-  # Failed Records section
+  # ── Failed Records ────────────────────────────────────────────────────────────
+  
   if (length(paywalled) > 0 || length(no_pdf) > 0 || length(technical) > 0) {
     report <- paste0(report, "## Failed Records\n\n")
     
@@ -113,7 +112,7 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
       report <- paste0(report,
                        "### Paywalled Content (n=", length(paywalled), ")\n```\n",
                        paste(head(paywalled, 20), collapse = "\n"), "\n",
-                       if (length(paywalled) > 20) paste0("... and ", length(paywalled) - 20, " more\n") else "", 
+                       if (length(paywalled) > 20) paste0("... and ", length(paywalled) - 20, " more\n") else "",
                        "```\n\n"
       )
     }
@@ -139,7 +138,79 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
     report <- paste0(report, "---\n\n")
   }
   
-  # Reproducibility Information
+  # ── PDF Validation ────────────────────────────────────────────────────────────
+  # Placed BEFORE Reproducibility to keep diagnostics together
+  
+  if ("pdf_valid" %in% colnames(log_data)) {
+    n_validated <- sum(!is.na(log_data$pdf_valid))
+    n_valid_pdfs <- sum(log_data$pdf_valid == TRUE, na.rm = TRUE)
+    n_invalid_pdfs <- sum(log_data$pdf_valid == FALSE, na.rm = TRUE)
+    
+    if (n_validated > 0) {
+      report <- paste0(report,
+                       "## PDF Integrity Validation\n\n",
+                       "- **PDFs validated:** ", n_validated, "\n",
+                       "- **Valid PDFs:** ", n_valid_pdfs, " (", sprintf("%.1f%%", (n_valid_pdfs / n_validated) * 100), ")\n",
+                       "- **Invalid PDFs detected and removed:** ", n_invalid_pdfs, " (", sprintf("%.1f%%", (n_invalid_pdfs / n_validated) * 100), ")\n\n"
+      )
+      
+      # Invalid PDF reasons breakdown
+      if (n_invalid_pdfs > 0) {
+        invalid_pdf_summary <- log_data %>%
+          filter(pdf_valid == FALSE) %>%
+          group_by(pdf_invalid_reason) %>%
+          summarise(count = n(), .groups = "drop") %>%
+          arrange(desc(count))
+        
+        report <- paste0(report,
+                         "### Invalid PDF Breakdown\n\n",
+                         "| Reason | Count | Description |\n",
+                         "|--------|-------|-------------|\n"
+        )
+        
+        # Human-readable descriptions for each reason
+        reason_descriptions <- list(
+          "html_error_page"      = "HTML error page disguised as PDF",
+          "file_too_small"       = "File too small (likely an error response)",
+          "missing_eof_marker"   = "Corrupt PDF missing %%EOF marker",
+          "invalid_pdf_format"   = "File does not begin with %PDF- header",
+          "corrupted_pdf"        = "PDF is damaged and unreadable",
+          "password_protected"   = "PDF is password-protected",
+          "unreadable_pdf"       = "PDF could not be parsed"
+        )
+        
+        for (i in 1:nrow(invalid_pdf_summary)) {
+          reason <- invalid_pdf_summary$pdf_invalid_reason[i]
+          description <- reason_descriptions[[reason]]
+          if (is.null(description)) description <- "Unknown issue"
+          
+          report <- paste0(report,
+                           "| ", reason, " | ",
+                           invalid_pdf_summary$count[i], " | ",
+                           description, " |\n"
+          )
+        }
+        
+        # List the actual invalid IDs
+        invalid_ids <- log_data %>%
+          filter(pdf_valid == FALSE) %>%
+          pull(id)
+        
+        report <- paste0(report,
+                         "\n### IDs with Invalid PDFs\n\n",
+                         "These records require manual retrieval:\n\n```\n",
+                         paste(head(invalid_ids, 20), collapse = "\n"), "\n",
+                         if (length(invalid_ids) > 20) paste0("... and ", length(invalid_ids) - 20, " more\n") else "",
+                         "```\n\n"
+        )
+      }
+      
+      report <- paste0(report, "---\n\n")
+    }
+  }
+  
+  # ── Reproducibility Information ───────────────────────────────────────────────
+  
   report <- paste0(report,
                    "## Reproducibility Information\n\n",
                    "**System Information:**\n",
@@ -153,17 +224,29 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
                    "- Unpaywall API (https://unpaywall.org)\n",
                    "- PubMed Central (https://www.ncbi.nlm.nih.gov/pmc/)\n",
                    "- Publisher websites via DOI resolution\n\n",
-                   "---\n\n",
+                   "---\n\n"
+  )
+  
+  # ── Recommendations ───────────────────────────────────────────────────────────
+  
+  report <- paste0(report,
                    "## Recommendations for Failed Records\n\n",
                    "1. **Paywalled content:** Request via institutional library or interlibrary loan\n",
                    "2. **No PDF available:** Check if articles are HTML-only or contact authors directly\n",
-                   "3. **Technical failures:** Retry manually during off-peak hours or contact publisher support\n\n",
-                   "---\n\n",
+                   "3. **Technical failures:** Retry manually during off-peak hours\n",
+                   if ("pdf_valid" %in% colnames(log_data) && sum(log_data$pdf_valid == FALSE, na.rm = TRUE) > 0)
+                     "4. **Invalid PDFs:** Re-attempt retrieval or obtain manually via library\n" else "",
+                   "\n---\n\n"
+  )
+  
+  # ── Citation ──────────────────────────────────────────────────────────────────
+  
+  report <- paste0(report,
                    "## Citation\n\n",
                    "If you use paperfetch in your research, please cite:\n\n",
                    "```\n",
-                   "Misra, K. (2025). paperfetch: The full-text acquisition layer for systematic reviews in R.\n",
-                   "R package version 0.1.0. https://github.com/HGND-laboratory/paperfetch\n",
+                   "paperfetch: The full-text acquisition layer for systematic reviews in R.\n",
+                   "R package version 0.1.0. https://github.com/misrak/paperfetch\n",
                    "```\n\n",
                    "---\n\n",
                    "**Note:** This report documents full-text retrieval procedures in accordance with PRISMA guidelines.\n"
@@ -171,3 +254,17 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
   
   writeLines(report, report_file)
 }
+```
+
+---
+  
+  The report now flows logically:
+  ```
+## Summary
+## Retrieval Methods
+## Failure Analysis
+## Failed Records
+## PDF Integrity Validation   ← NEW: right here, before reproducibility
+## Reproducibility Information
+## Recommendations
+## Citation
