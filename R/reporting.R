@@ -271,7 +271,7 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
                    "If you use paperfetch in your research, please cite:\n\n",
                    "```\n",
                    "paperfetch: The full-text acquisition layer for systematic reviews in R.\n",
-                   "R package version 0.1.0. https://github.com/misrak/paperfetch\n",
+                   "R package version 0.1.0. https://github.com/HGND-laboratory/paperfetch\n",
                    "```\n\n",
                    "---\n\n",
                    "**Note:** This report documents full-text retrieval procedures in accordance with PRISMA guidelines.\n"
