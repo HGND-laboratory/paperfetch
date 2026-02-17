@@ -1,0 +1,34 @@
+Package: paperfetch
+Title: The Full-Text Acquisition Layer for Systematic Reviews in R
+Version: 0.1.0
+Authors@R: 
+    person("Kaalindi", "Misra", , "misra.kaalindi@hsr.it", role = c("aut", "cre"))
+Description: Provides transparent, reproducible PDF retrieval for 
+    systematic reviews and meta-analyses. Generates structured acquisition 
+    logs, PRISMA-compliant reports, and validates downloaded files to 
+    ensure research integrity.
+License: MIT + file LICENSE
+URL: https://github.com/HGND-laboratory/paperfetch
+BugReports: https://github.com/HGND-laboratory/paperfetch/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports: 
+    cli,
+    dplyr,
+    httr2,
+    progress,
+    purrr,
+    readr,
+    rvest,
+    xml2
+Suggests: 
+    bib2df,
+    knitr,
+    pdftools,
+    PRISMA2020,
+    rmarkdown,
+    synthesisr,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3

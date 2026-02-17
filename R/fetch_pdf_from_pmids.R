@@ -6,11 +6,15 @@
 #' @param csv_file_path Path to CSV file containing a 'pmid', 'PMID', or 'pubmed_id' column
 #' @param output_folder Directory for saving PDFs (created if doesn't exist)
 #' @param delay Seconds to wait between requests (default: 2)
-#' @param email Your email for identification (required)
+#' @param email Your email for identification Can also be set via
+#'   \code{PAPERFETCH_EMAIL} in \code{.Renviron}
 #' @param timeout Maximum seconds to wait per request (default: 15)
 #' @param log_file Path for structured CSV log (default: "download_log.csv")
 #' @param report_file Path for Markdown report (default: "acquisition_report.md")
-#'
+#' @param validate_pdfs Validate downloaded files for integrity (default: TRUE)
+#' @param remove_invalid Remove invalid files automatically (default: TRUE)
+#' @param proxy Proxy URL e.g. "http://proxy.univ.edu:8080", or NULL (default: NULL)
+
 #' @return Invisibly returns the log dataframe
 #' @export
 #'
@@ -33,15 +37,6 @@ fetch_pdfs_from_pmids <- function(csv_file_path,
                                   validate_pdfs = TRUE,
                                   remove_invalid = TRUE,
                                   proxy          = NULL) {
-  
-  # Load required libraries
-  require(httr2)
-  require(rvest)
-  require(xml2)
-  require(readr)
-  require(dplyr)
-  require(cli)
-  require(progress)
   
   # Resolve email (argument → .Renviron → warning)
   email <- resolve_email(email)

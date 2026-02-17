@@ -65,11 +65,10 @@ test_that("resolve_email warns and returns placeholder when nothing set", {
   withr::with_envvar(
     c(PAPERFETCH_EMAIL = ""),
     {
-      expect_warning(
-        result <- resolve_email(NULL),
-        regexp = NA   # cli warnings don't use base warning — just check return
-      )
-      # Returns placeholder rather than crashing
+      # Suppress the cli warning — we just want to test the return value
+      suppressMessages({
+        result <- resolve_email(NULL)
+      })
       expect_type(result, "character")
       expect_true(nchar(result) > 0)
     }

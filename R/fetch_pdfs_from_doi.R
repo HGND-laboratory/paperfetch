@@ -31,9 +31,6 @@ fetch_pdfs_from_doi <- function(csv_file_path,
                                 remove_invalid = TRUE,
                                 proxy          = NULL) {
   
-  require(httr2); require(rvest); require(xml2)
-  require(readr); require(dplyr); require(cli); require(progress)
-  
   # Resolve email (argument → .Renviron → warning)
   email <- resolve_email(email)
   

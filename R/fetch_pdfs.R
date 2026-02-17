@@ -6,11 +6,16 @@
 #' @param input Either a CSV file path, a vector of IDs, or a single ID string
 #' @param output_folder Directory to save downloaded PDFs (default: "downloads")
 #' @param delay Seconds between requests (default: 2)
-#' @param email Your email for API identification (required)
+#' @param email Your email for API identification Can also be set via
+#'   \code{PAPERFETCH_EMAIL} in \code{.Renviron}
 #' @param timeout Maximum seconds per request (default: 15)
 #' @param log_file File to log structured download attempts (default: "download_log.csv")
 #' @param report_file File for Markdown acquisition report (default: "acquisition_report.md")
 #' @param unfetched_file File to log failed downloads (default: "unfetched.txt")
+#' @param validate_pdfs Validate downloaded files for integrity (default: TRUE)
+#' @param remove_invalid Remove invalid files automatically (default: TRUE)
+#' @param proxy Proxy URL e.g. "http://proxy.univ.edu:8080", or NULL (default: NULL)
+
 #'
 #' @return Invisibly returns a list with success and failure counts
 #' @export
@@ -39,14 +44,6 @@ fetch_pdfs <- function(input,
                        remove_invalid = TRUE,
                        proxy          = NULL) {
   
-  # Load required libraries
-  require(httr2)
-  require(rvest)
-  require(xml2)
-  require(readr)
-  require(dplyr)
-  require(cli)
-  require(progress)
   
   # Resolve email once here — subfunctions will re-resolve but
   # this gives early feedback to the user
