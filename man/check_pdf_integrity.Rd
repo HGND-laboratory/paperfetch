@@ -8,7 +8,8 @@ check_pdf_integrity(
   output_folder,
   log_file = NULL,
   remove_invalid = FALSE,
-  use_advanced = FALSE
+  use_advanced = FALSE,
+  min_size_kb = 10
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ check_pdf_integrity(
 \item{remove_invalid}{Remove invalid PDFs (default: FALSE, just report)}
 
 \item{use_advanced}{Use pdftools for deep validation (default: FALSE)}
+
+\item{min_size_kb}{Minimum file size threshold in KB (default: 10)}
 }
 \value{
 Data frame with validation results for each file
@@ -33,5 +36,8 @@ validation_results <- check_pdf_integrity("downloads")
 
 # Check and remove invalid PDFs
 validation_results <- check_pdf_integrity("downloads", remove_invalid = TRUE)
+
+# Use lenient threshold for PMC/Elsevier PDFs
+validation_results <- check_pdf_integrity("downloads", min_size_kb = 1)
 }
 }

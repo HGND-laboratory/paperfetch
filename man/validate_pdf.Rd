@@ -15,13 +15,11 @@ validate_pdf(file_path, min_size_kb = 10, verbose = FALSE)
 }
 \value{
 List with validation results:
-\itemize{
-\item valid: Logical, TRUE if PDF is valid
-\item reason: Character, reason for failure (if invalid)
-\item file_size_kb: Numeric, actual file size
-\item is_pdf: Logical, TRUE if file has PDF magic number
-\item is_html: Logical, TRUE if file appears to be HTML
-}
+\item{valid}{Logical, TRUE if PDF is valid}
+\item{reason}{Character, reason for failure (if invalid)}
+\item{file_size_kb}{Numeric, actual file size}
+\item{is_pdf}{Logical, TRUE if file has PDF magic number}
+\item{is_html}{Logical, TRUE if file appears to be HTML}
 }
 \description{
 Checks if a downloaded file is a valid PDF or a corrupt/fake file
@@ -29,7 +27,15 @@ Checks if a downloaded file is a valid PDF or a corrupt/fake file
 }
 \examples{
 \dontrun{
-validate_pdf("paper.pdf")
+# Validate a single PDF
+result <- validate_pdf("paper.pdf")
+if (result$valid) {
+  message("PDF is valid")
+} else {
+  message("Invalid: ", result$reason)
+}
+
+# Use a lower threshold for trusted sources
+result <- validate_pdf("pmc_paper.pdf", min_size_kb = 1)
 }
 }
-\keyword{internal}

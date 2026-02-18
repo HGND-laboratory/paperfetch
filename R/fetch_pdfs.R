@@ -15,7 +15,10 @@
 #' @param validate_pdfs Validate downloaded files for integrity (default: TRUE)
 #' @param remove_invalid Remove invalid files automatically (default: TRUE)
 #' @param proxy Proxy URL e.g. "http://proxy.univ.edu:8080", or NULL (default: NULL)
-
+#' @param elsevier_api_key Elsevier API key for TDM access. Can also be set via
+#'   \code{ELSEVIER_API_KEY} in \code{.Renviron} (default: NULL)
+#' @param elsevier_insttoken Elsevier institutional token for subscribed content.
+#'   Can also be set via \code{ELSEVIER_INSTTOKEN} in \code{.Renviron} (default: NULL)
 #'
 #' @return Invisibly returns a list with success and failure counts
 #' @export
@@ -30,19 +33,25 @@
 #'
 #' # Mixed IDs
 #' fetch_pdfs(c("10.1038/nature12373", "30670877", "PMC5176308"), email = "you@edu")
+#'
+#' # With Elsevier credentials (or set ELSEVIER_API_KEY in .Renviron)
+#' fetch_pdfs("my_refs.csv", email = "you@edu",
+#'            elsevier_api_key = "your_key", elsevier_insttoken = "your_token")
 #' }
 
 fetch_pdfs <- function(input, 
-                       output_folder = "downloads", 
-                       delay = 2, 
-                       email = NULL,
-                       timeout = 15,
-                       log_file = "download_log.csv",
-                       report_file = "acquisition_report.md",
-                       unfetched_file = "unfetched.txt",
-                       validate_pdfs = TRUE,
-                       remove_invalid = TRUE,
-                       proxy          = NULL) {
+                       output_folder      = "downloads", 
+                       delay              = 2, 
+                       email              = NULL,
+                       timeout            = 15,
+                       log_file           = "download_log.csv",
+                       report_file        = "acquisition_report.md",
+                       unfetched_file     = "unfetched.txt",
+                       validate_pdfs      = TRUE,
+                       remove_invalid     = TRUE,
+                       proxy              = NULL,
+                       elsevier_api_key   = NULL,
+                       elsevier_insttoken = NULL) {
   
   
   # Resolve email once here — subfunctions will re-resolve but
@@ -75,11 +84,11 @@ fetch_pdfs <- function(input,
     if ("doi" %in% tolower(colnames(data))) {
       fetch_pdfs_from_doi(input, output_folder, delay, email, timeout,
                           log_file, report_file, validate_pdfs, remove_invalid,
-                          proxy)                                       # passed through
+                          proxy, elsevier_api_key, elsevier_insttoken)
     } else if (any(c("pmid", "pubmed_id") %in% tolower(colnames(data)))) {
       fetch_pdfs_from_pmids(input, output_folder, delay, email, timeout,
                             log_file, report_file, validate_pdfs, remove_invalid,
-                            proxy)                                     # passed through
+                            proxy)
     } else {
       stop("CSV must contain a 'doi', 'pmid', or 'pubmed_id' column")
     }
@@ -114,7 +123,7 @@ fetch_pdfs <- function(input,
     tryCatch(
       fetch_pdfs_from_doi(temp_csv, output_folder, delay, email, timeout,
                           log_file, report_file, validate_pdfs, remove_invalid,
-                          proxy),                                      # passed through
+                          proxy, elsevier_api_key, elsevier_insttoken),
       error = function(e) unfetched <<- c(unfetched, dois)
     )
     unlink(temp_csv)

@@ -15,7 +15,9 @@ fetch_pdfs(
   unfetched_file = "unfetched.txt",
   validate_pdfs = TRUE,
   remove_invalid = TRUE,
-  proxy = NULL
+  proxy = NULL,
+  elsevier_api_key = NULL,
+  elsevier_insttoken = NULL
 )
 }
 \arguments{
@@ -41,6 +43,12 @@ fetch_pdfs(
 \item{remove_invalid}{Remove invalid files automatically (default: TRUE)}
 
 \item{proxy}{Proxy URL e.g. "http://proxy.univ.edu:8080", or NULL (default: NULL)}
+
+\item{elsevier_api_key}{Elsevier API key for TDM access. Can also be set via
+\code{ELSEVIER_API_KEY} in \code{.Renviron} (default: NULL)}
+
+\item{elsevier_insttoken}{Elsevier institutional token for subscribed content.
+Can also be set via \code{ELSEVIER_INSTTOKEN} in \code{.Renviron} (default: NULL)}
 }
 \value{
 Invisibly returns a list with success and failure counts
@@ -59,5 +67,9 @@ fetch_pdfs(c("10.1038/nature12373", "10.1126/science.1234567"), email = "you@edu
 
 # Mixed IDs
 fetch_pdfs(c("10.1038/nature12373", "30670877", "PMC5176308"), email = "you@edu")
+
+# With Elsevier credentials (or set ELSEVIER_API_KEY in .Renviron)
+fetch_pdfs("my_refs.csv", email = "you@edu",
+           elsevier_api_key = "your_key", elsevier_insttoken = "your_token")
 }
 }

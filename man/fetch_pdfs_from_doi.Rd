@@ -14,7 +14,9 @@ fetch_pdfs_from_doi(
   report_file = "acquisition_report.md",
   validate_pdfs = TRUE,
   remove_invalid = TRUE,
-  proxy = NULL
+  proxy = NULL,
+  elsevier_api_key = NULL,
+  elsevier_insttoken = NULL
 )
 }
 \arguments{
@@ -40,6 +42,12 @@ fetch_pdfs_from_doi(
 \item{proxy}{Proxy URL string e.g. "http://proxy.univ.edu:8080". Can also
 be set via \code{PAPERFETCH_PROXY} in \code{.Renviron}. NULL uses
 system default (default: NULL)}
+
+\item{elsevier_api_key}{Elsevier API key for TDM access. Can also be set via
+\code{ELSEVIER_API_KEY} in \code{.Renviron} (default: NULL)}
+
+\item{elsevier_insttoken}{Elsevier institutional token for subscribed content.
+Can also be set via \code{ELSEVIER_INSTTOKEN} in \code{.Renviron} (default: NULL)}
 }
 \value{
 Invisibly returns the log dataframe

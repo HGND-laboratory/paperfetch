@@ -8,17 +8,26 @@
 #' @param verbose Print validation details (default: FALSE)
 #'
 #' @return List with validation results:
-#'   - valid: Logical, TRUE if PDF is valid
-#'   - reason: Character, reason for failure (if invalid)
-#'   - file_size_kb: Numeric, actual file size
-#'   - is_pdf: Logical, TRUE if file has PDF magic number
-#'   - is_html: Logical, TRUE if file appears to be HTML
+#'   \item{valid}{Logical, TRUE if PDF is valid}
+#'   \item{reason}{Character, reason for failure (if invalid)}
+#'   \item{file_size_kb}{Numeric, actual file size}
+#'   \item{is_pdf}{Logical, TRUE if file has PDF magic number}
+#'   \item{is_html}{Logical, TRUE if file appears to be HTML}
 #'
-#' @keywords internal
+#' @export
 #'
 #' @examples
 #' \dontrun{
-#' validate_pdf("paper.pdf")
+#' # Validate a single PDF
+#' result <- validate_pdf("paper.pdf")
+#' if (result$valid) {
+#'   message("PDF is valid")
+#' } else {
+#'   message("Invalid: ", result$reason)
+#' }
+#' 
+#' # Use a lower threshold for trusted sources
+#' result <- validate_pdf("pmc_paper.pdf", min_size_kb = 1)
 #' }
 
 validate_pdf <- function(file_path, min_size_kb = 10, verbose = FALSE) {
@@ -186,6 +195,7 @@ validate_pdf_advanced <- function(file_path) {
 #' @param log_file Path to the download log CSV (will be updated)
 #' @param remove_invalid Remove invalid PDFs (default: FALSE, just report)
 #' @param use_advanced Use pdftools for deep validation (default: FALSE)
+#' @param min_size_kb Minimum file size threshold in KB (default: 10)
 #'
 #' @return Data frame with validation results for each file
 #' @export
@@ -197,12 +207,16 @@ validate_pdf_advanced <- function(file_path) {
 #'
 #' # Check and remove invalid PDFs
 #' validation_results <- check_pdf_integrity("downloads", remove_invalid = TRUE)
+#' 
+#' # Use lenient threshold for PMC/Elsevier PDFs
+#' validation_results <- check_pdf_integrity("downloads", min_size_kb = 1)
 #' }
 
 check_pdf_integrity <- function(output_folder, 
                                 log_file = NULL,
                                 remove_invalid = FALSE,
-                                use_advanced = FALSE) {
+                                use_advanced = FALSE,
+                                min_size_kb = 10) {
   
   # Get all PDF files
   pdf_files <- list.files(output_folder, pattern = "\\.pdf$", full.names = TRUE)
@@ -217,8 +231,8 @@ check_pdf_integrity <- function(output_folder,
   # Validate each file
   validation_results <- lapply(pdf_files, function(file_path) {
     
-    # Basic validation
-    basic_result <- validate_pdf(file_path)
+    # Basic validation with adjustable threshold
+    basic_result <- validate_pdf(file_path, min_size_kb = min_size_kb)
     
     # Advanced validation if requested and available
     if (use_advanced && basic_result$valid) {
@@ -308,4 +322,73 @@ check_pdf_integrity <- function(output_folder,
   }
   
   return(validation_df)
+}
+
+
+#' Validate PDFs After Download
+#'
+#' Convenience wrapper to validate PDFs and update logs after a download session
+#'
+#' @param output_folder Directory containing downloaded PDFs
+#' @param log_file Path to the download log CSV
+#' @param report_file Path to regenerate acquisition report
+#' @param email Email for report regeneration
+#' @param remove_invalid Remove invalid PDFs (default: TRUE)
+#' @param use_advanced Use pdftools for deep validation (default: FALSE)
+#'
+#' @return Data frame with validation results
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # After downloading PDFs
+#' fetch_pdfs_from_doi("dois.csv", email = "you@edu")
+#'
+#' # Validate and clean up
+#' validate_pdfs_after_download(
+#'   output_folder = "downloads",
+#'   log_file = "download_log.csv",
+#'   report_file = "acquisition_report.md",
+#'   email = "you@edu",
+#'   remove_invalid = TRUE
+#' )
+#' }
+
+validate_pdfs_after_download <- function(output_folder = "downloads",
+                                         log_file = "download_log.csv",
+                                         report_file = "acquisition_report.md",
+                                         email = "your@email.com",
+                                         remove_invalid = TRUE,
+                                         use_advanced = FALSE) {
+  
+  cli_h1("Post-Download PDF Validation")
+  
+  # Validate PDFs
+  validation_results <- check_pdf_integrity(
+    output_folder = output_folder,
+    log_file = log_file,
+    remove_invalid = remove_invalid,
+    use_advanced = use_advanced
+  )
+  
+  # Regenerate report with updated log
+  if (file.exists(log_file)) {
+    cli_alert_info("Regenerating acquisition report with validation results...")
+    
+    log_data <- read_csv(log_file, show_col_types = FALSE)
+    
+    # Determine ID type
+    id_type <- if ("doi" %in% names(log_data) || all(log_data$id_type == "doi")) {
+      "doi"
+    } else if ("pmid" %in% names(log_data) || all(log_data$id_type == "pmid")) {
+      "pmid"
+    } else {
+      "mixed"
+    }
+    
+    generate_acquisition_report(log_data, report_file, email, id_type)
+    cli_alert_success("Updated acquisition report: {report_file}")
+  }
+  
+  return(validation_results)
 }

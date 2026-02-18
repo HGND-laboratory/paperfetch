@@ -167,32 +167,43 @@ fetch_pdfs_from_pmids <- function(csv_file_path,
       http_status    <<- "error"
     })
     
-    # STEP 2: Try PubMed Central (PMC)
+    # STEP 2: Try PubMed Central (PMC) via shared helper
+    # First try scraping the PMC link directly from the PubMed page (fast),
+    # then fall back to the NCBI elink API lookup if that fails.
     if (is.null(pdf_url) && !is.null(page)) {
       tryCatch({
-        pmc_id <- page %>%
+        # Fast path: PMC link is visible on the PubMed page itself
+        pmc_id_scraped <- page %>%
           html_node("a.id-link[data-ga-action='PMC']") %>%
           html_attr("href") %>%
           gsub(".*/", "", .)
         
-        if (!is.na(pmc_id) && !is.null(pmc_id)) {
-          pmc_pdf_url <- paste0("https://www.ncbi.nlm.nih.gov/pmc/articles/", pmc_id, "/pdf/")
-          
-          test_response <- request(pmc_pdf_url) %>%
-            req_user_agent(user_agent) %>%
-            req_timeout(timeout) %>%
-            req_perform()
-          
-          if (test_response$status_code == 200) {
-            pdf_url <- pmc_pdf_url
-            article_url <- paste0("https://www.ncbi.nlm.nih.gov/pmc/articles/", pmc_id, "/")
-            current_method <- "pmc"
-            http_status <- "200"
-          }
+        if (!is.na(pmc_id_scraped) && nchar(pmc_id_scraped) > 0) {
+          pdf_url     <- paste0("https://pmc.ncbi.nlm.nih.gov/articles/", pmc_id_scraped, "/pdf/")
+          article_url <- paste0("https://pmc.ncbi.nlm.nih.gov/articles/", pmc_id_scraped, "/")
+          current_method <- "pmc"
+          http_status    <- "200"
         }
       }, error = function(e) {
         if (is.na(current_method)) current_method <<- "pmc"
       })
+    }
+    
+    # If page scrape didn't find PMC but we have a DOI, try elink API
+    if (is.null(pdf_url) && !is.null(doi) && !is.na(doi)) {
+      pmc_result <- fetch_pmc_pdf_url(
+        doi        = doi,
+        email      = email,
+        user_agent = user_agent,
+        timeout    = timeout,
+        proxy      = proxy
+      )
+      if (!is.null(pmc_result$pdf_url)) {
+        pdf_url        <- pmc_result$pdf_url
+        article_url    <- pmc_result$article_url
+        current_method <- "pmc_elink"
+        http_status    <- "200"
+      }
     }
     
     # STEP 3: Try scraping PDF link from PubMed page

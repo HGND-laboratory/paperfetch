@@ -20,7 +20,7 @@ methods section.
 ✅ **PDF integrity validation** — Detects HTML error pages and corrupt files disguised as PDFs  
 ✅ **PRISMA 2020 integration** — Direct bridge to `PRISMA2020` flow diagrams  
 ✅ **Multi-database import** — Works with Web of Science, Scopus, Cochrane, and more  
-✅ **Multi-source fallback** — Unpaywall → PMC → DOI resolution → Citation scraping  
+✅ **Multi-source fallback** — Unpaywall → PMC → Elsevier TDM API → DOI resolution → Citation scraping → Journal URL patterns (NEJM, Lancet, MDPI)  
 
 ### How paperfetch compares
 
@@ -94,6 +94,8 @@ Add these lines and **restart R**:
 ```
 PAPERFETCH_EMAIL="yourname@institution.edu"
 PAPERFETCH_PROXY="http://proxyserver.univ.edu:8080"  # only if needed
+ELSEVIER_API_KEY="your_api_key"                      # get free key at dev.elsevier.com
+ELSEVIER_INSTTOKEN="your_insttoken"                  # request from your library
 ```
 
 Now you can call all functions without repeating your email:
@@ -304,10 +306,10 @@ validate_pdfs_after_download("papers", use_advanced = TRUE)
 | `id` | DOI, PMID, or PMC ID | `10.1038/nature12373` |
 | `id_type` | Type of identifier | `doi`, `pmid`, `pmc` |
 | `timestamp` | ISO 8601 timestamp | `2025-02-16T14:23:45Z` |
-| `method` | Retrieval method used | `unpaywall`, `pmc`, `doi_resolution`, `scrape` |
+| `method` | Retrieval method used | `unpaywall`, `pmc_fallback`, `elsevier_api`, `journal_url_pattern`, `citation_metadata`, `scrape` |
 | `status` | HTTP status code | `200`, `403`, `404`, `timeout` |
 | `success` | Download succeeded | `TRUE`, `FALSE` |
-| `failure_reason` | Why it failed | `paywalled`, `no_pdf_found`, `timeout` |
+| `failure_reason` | Why it failed | `paywalled`, `no_pdf_found`, `timeout`, `file_too_small`, `missing_eof_marker`, `elsevier_no_entitlement` |
 | `pdf_url` | Final PDF URL | `https://ncbi.nlm.nih.gov/pmc/...` |
 | `file_path` | Local file path | `papers/10_1038_nature12373.pdf` |
 | `file_size_kb` | File size in KB | `1024.5` |
@@ -398,19 +400,14 @@ plot_prisma_fulltext(prisma_stats, save_path = "systematic_review/figures/prisma
 ```r
 log <- read.csv("download_log.csv")
 
-# Export paywalled papers for library request
+# Export paywalled papers for library interlibrary loan request
 write.csv(
-  log[grepl("paywalled|403", log$failure_reason), "id", drop = FALSE],
+  log[grepl("paywalled|elsevier_no_entitlement", log$failure_reason), "id", drop = FALSE],
   "library_requests.csv", row.names = FALSE
 )
-
-# Retry timeouts with longer timeout
-write.csv(
-  log[grepl("timeout", log$failure_reason), "id", drop = FALSE],
-  "retry.csv", row.names = FALSE
-)
-fetch_pdfs("retry.csv", timeout = 30)
 ```
+
+> 💡 See the [Troubleshooting](#troubleshooting) section for a full breakdown of failure codes and how to handle each one.
 
 ---
 
@@ -418,11 +415,41 @@ fetch_pdfs("retry.csv", timeout = 30)
 
 ### Low success rate
 - Check DOIs/PMIDs for typos or malformed IDs
-- Many failures expected for paywalled content
-- Review `acquisition_report.md` for failure patterns
+- Many failures expected for paywalled content without institutional credentials
+- Review `acquisition_report.md` for failure patterns by journal/publisher
 
-### High rate of invalid PDFs
-- Common with Elsevier and Wiley anti-bot responses
+### Understanding failure codes in `download_log.csv`
+
+| `failure_reason` | Meaning | What to do |
+|-----------------|---------|------------|
+| `paywalled` | Journal returned 403 — subscription required | Use institutional proxy or request via library |
+| `no_pdf_found` | No PDF URL found by any method | Check DOI is correct; paper may be preprint-only |
+| `file_too_small` | Downloaded file is too small to be a real PDF — likely an HTML redirect or login page | Usually resolves after PMC fix; otherwise paywalled |
+| `missing_eof_marker` | PDF truncated mid-download | Retry with `timeout = 30`; may be a slow server |
+| `elsevier_no_entitlement` | Elsevier API key set but no institutional token | Request `ELSEVIER_INSTTOKEN` from your library |
+| `elsevier_unauthorized` | Elsevier API key invalid or expired | Check `ELSEVIER_API_KEY` in `.Renviron` |
+| `not_found` | URL returned 404 — article not at expected location | PMC record exists but no PDF deposited; paper will fall through to journal scraping |
+| `timeout` | Request exceeded time limit | Retry with `timeout = 30` |
+| `server_error` | Publisher server error (500/502/503) | Retry later |
+
+### Handle failures systematically
+```r
+log <- read.csv("download_log.csv")
+
+# Export paywalled papers for library request
+write.csv(
+  log[grepl("paywalled|elsevier_no_entitlement", log$failure_reason), "id", drop = FALSE],
+  "library_requests.csv", row.names = FALSE
+)
+
+# Retry timeouts with a longer timeout
+timeouts <- log[grepl("timeout|missing_eof", log$failure_reason), "id"]
+fetch_pdfs(timeouts, timeout = 30)
+```
+
+### High rate of `file_too_small` or `missing_eof_marker`
+- Common with PMC when the server needs time to prepare the PDF — this is handled automatically with retries, but very new articles may not have their PDF ready yet
+- Also common with Elsevier/Wiley anti-bot responses when no API key is set
 - Check `pdf_invalid_reason` column in `download_log.csv`
 - Set `remove_invalid = FALSE` to inspect files before deletion
 
@@ -468,6 +495,11 @@ HTML report output, PDF metadata extraction, institutional repository support.
 - ✅ PRISMA 2020 integration via `as_prisma_counts()` and `plot_prisma_fulltext()`
 - ✅ Proxy and VPN support
 - ✅ `.Renviron` credential management
+- ✅ PMC fallback via NCBI E-utilities with redirect resolution and retry logic
+- ✅ Elsevier TDM API support (Lancet, Cell, EJCA, and all Elsevier journals)
+- ✅ Journal-specific URL patterns (NEJM, Lancet family, MDPI)
+- ✅ Graceful handling of `embedded nul` binary PDF downloads
+- ✅ PMC 404 fallthrough — articles without a deposited PDF fall back to journal scraping
 
 **v0.2.0 (Planned)**
 - [ ] arXiv and bioRxiv support
@@ -490,6 +522,9 @@ paperfetch/
 │   ├── fetch_pdfs.R
 │   ├── fetch_pdfs_from_doi.R
 │   ├── fetch_pdfs_from_pmids.R
+│   ├── get_elsevier_pdf.R
+│   ├── fetch_pmc_pdf.R
+│   ├── construct_journal_pdf_url.R
 │   ├── import_refs.R
 │   ├── prisma.R
 │   ├── pdf_validation.R
@@ -526,7 +561,7 @@ MIT — see `LICENSE` for details.
 
 ## Contact
 
-**Maintainer:** Kaalindi Misra · misra.kaalindi@hsr.it  
+**Maintainer:** Kaalindi Misra
 **GitHub:** https://github.com/HGND-laboratory/paperfetch  
 **Issues:** https://github.com/HGND-laboratory/paperfetch/issues
 
@@ -540,7 +575,8 @@ Built with [httr2](https://httr2.r-lib.org/), [rvest](https://rvest.tidyverse.or
 
 Data sources: [Unpaywall](https://unpaywall.org),
 [PubMed Central](https://www.ncbi.nlm.nih.gov/pmc/),
-[NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/).
+[NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/),
+[Elsevier TDM API](https://dev.elsevier.com).
 
 Integrations: [synthesisr](https://github.com/mjwestgate/synthesisr),
 [PRISMA2020](https://github.com/MatthewBJane/PRISMA2020).
