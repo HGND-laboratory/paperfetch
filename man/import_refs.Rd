@@ -7,7 +7,7 @@
 import_refs(
   files,
   deduplicate = TRUE,
-  match_by = "doi",
+  match_by = "title",
   id_col = "doi",
   verbose = TRUE
 )
@@ -15,16 +15,15 @@ import_refs(
 \arguments{
 \item{files}{Character vector of file paths to import. Supports:
 \itemize{
-\item \code{.bib} — BibTeX (Web of Science, Google Scholar)
-\item \code{.ris} — RIS format (Scopus, Embase, PsycINFO)
-\item \code{.txt} — Plain text (Cochrane, PubMed)
-\item \code{.csv} — CSV exports (any database)
+\item \code{.bib} - BibTeX (Web of Science, Google Scholar)
+\item \code{.ris} - RIS format (Scopus, Embase, PsycINFO)
+\item \code{.txt} - Plain text (Cochrane, PubMed)
+\item \code{.csv} - CSV exports (any database)
 }}
 
 \item{deduplicate}{Deduplicate references after import (default: TRUE)}
 
-\item{match_by}{Column(s) to use for deduplication. One of:
-\code{"doi"} (default), \code{"title"}, or \code{c("doi", "title")}}
+\item{match_by}{Column to use for deduplication (default: "title")}
 
 \item{id_col}{Which column to use for PDF fetching: \code{"doi"} (default)
 or \code{"pmid"}}

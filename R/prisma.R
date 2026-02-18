@@ -45,8 +45,6 @@
 #' }
 
 as_prisma_counts <- function(log_file, verbose = TRUE) {
-  require(cli)
-  require(readr)
   
   # Accept either a file path or an already-loaded data frame
   if (is.character(log_file)) {
@@ -181,6 +179,9 @@ as_prisma_counts <- function(log_file, verbose = TRUE) {
 #' @return A PRISMA 2020 flow diagram object (invisibly)
 #'
 #' @details
+#' Requires the \code{PRISMA2020} package. Install with:
+#' \code{install.packages("PRISMA2020")}
+#'
 #' The \code{previous_counts} argument accepts a named list for earlier
 #' PRISMA phases. Supported names:
 #' \itemize{
@@ -204,10 +205,10 @@ as_prisma_counts <- function(log_file, verbose = TRUE) {
 #' plot_prisma_fulltext(
 #'   prisma_counts,
 #'   previous_counts = list(
-#'     database_results  = 892,
+#'     database_results   = 892,
 #'     duplicates_removed = 238,
-#'     records_screened  = 654,
-#'     records_excluded  = 126
+#'     records_screened   = 654,
+#'     records_excluded   = 126
 #'   ),
 #'   save_path = "figures/prisma_diagram.png"
 #' )
@@ -217,8 +218,6 @@ plot_prisma_fulltext <- function(prisma_counts,
                                  previous_counts = NULL,
                                  save_path       = NULL,
                                  interactive     = FALSE) {
-  
-  require(cli)
   
   # Check PRISMA2020 is available
   if (!requireNamespace("PRISMA2020", quietly = TRUE)) {
@@ -251,7 +250,7 @@ plot_prisma_fulltext <- function(prisma_counts,
   )
   
   # Generate the flow diagram
-  diagram <- PRISMA2020::PRISMA_flowchart(
+  diagram <- PRISMA2020::PRISMA_flowdiagram(
     data        = prisma_template,
     interactive = interactive
   )
@@ -285,6 +284,5 @@ plot_prisma_fulltext <- function(prisma_counts,
 }
 
 
-#' Null-coalescing operator
-#' @keywords internal
+# Null-coalescing operator (internal only, no export)
 `%||%` <- function(x, y) if (!is.null(x)) x else y

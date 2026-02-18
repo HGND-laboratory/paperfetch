@@ -26,7 +26,7 @@ classify_id <- function(id) {
 #' @keywords internal
 
 convert_pmc_to_pmid <- function(pmc_ids) {
-  require(httr2)
+  
   
   pmc_ids <- gsub("^(?!PMC)", "PMC", pmc_ids, perl = TRUE)
   

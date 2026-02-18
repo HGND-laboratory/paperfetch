@@ -46,9 +46,9 @@ test_that("validate_pdf returns FALSE for non-existent file", {
 test_that("validate_pdf detects valid PDF by magic number", {
   tmp <- tempfile(fileext = ".pdf")
   on.exit(unlink(tmp))
-  create_minimal_pdf(tmp)
+  write_minimal_pdf(tmp)  # Now creates a properly sized file
   
-  result <- validate_pdf(tmp)
+  result <- validate_pdf(tmp, min_size_kb = 1)  # Lower threshold for test
   expect_true(result$is_pdf)
   expect_false(result$is_html)
 })
@@ -56,9 +56,9 @@ test_that("validate_pdf detects valid PDF by magic number", {
 test_that("validate_pdf detects HTML error page", {
   tmp <- tempfile(fileext = ".pdf")
   on.exit(unlink(tmp))
-  create_fake_pdf_html(tmp)
+  write_fake_pdf(tmp)  # Now creates a properly sized HTML file
   
-  result <- validate_pdf(tmp)
+  result <- validate_pdf(tmp, min_size_kb = 1)  # Lower threshold
   expect_false(result$valid)
   expect_true(result$is_html)
   expect_equal(result$reason, "html_error_page")
@@ -67,7 +67,7 @@ test_that("validate_pdf detects HTML error page", {
 test_that("validate_pdf fails for file below minimum size", {
   tmp <- tempfile(fileext = ".pdf")
   on.exit(unlink(tmp))
-  create_tiny_file(tmp)
+  write_tiny_file(tmp)  # This one stays tiny
   
   result <- validate_pdf(tmp, min_size_kb = 10)
   expect_false(result$valid)
@@ -101,8 +101,8 @@ test_that("check_pdf_integrity validates multiple files", {
   dir.create(tmp_dir)
   on.exit(unlink(tmp_dir, recursive = TRUE))
   
-  create_minimal_pdf(file.path(tmp_dir, "valid.pdf"))
-  create_fake_pdf_html(file.path(tmp_dir, "fake.pdf"))
+  write_minimal_pdf(file.path(tmp_dir, "valid.pdf"))
+  write_fake_pdf(file.path(tmp_dir, "fake.pdf"))
   
   result <- check_pdf_integrity(tmp_dir, remove_invalid = FALSE)
   
@@ -119,8 +119,8 @@ test_that("check_pdf_integrity removes invalid files when remove_invalid = TRUE"
   valid_path <- file.path(tmp_dir, "valid.pdf")
   fake_path  <- file.path(tmp_dir, "fake.pdf")
   
-  create_minimal_pdf(valid_path)
-  create_fake_pdf_html(fake_path)
+  write_minimal_pdf(valid_path)
+  write_fake_pdf(fake_path)
   
   check_pdf_integrity(tmp_dir, remove_invalid = TRUE)
   

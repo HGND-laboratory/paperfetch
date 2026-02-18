@@ -35,7 +35,7 @@
 fetch_pdfs <- function(input, 
                        output_folder = "downloads", 
                        delay = 2, 
-                       email = "your@email.com",
+                       email = NULL,
                        timeout = 15,
                        log_file = "download_log.csv",
                        report_file = "acquisition_report.md",
@@ -60,7 +60,16 @@ fetch_pdfs <- function(input,
   }
   
   # CASE 1: CSV file
-  if (length(input) == 1 && file.exists(input) && grepl("\\.csv$", input, ignore.case = TRUE)) {
+  if (length(input) == 1 && grepl("\\.csv$", input, ignore.case = TRUE)) {
+    if (!file.exists(input)) {
+      cli_abort(c(
+        "CSV file not found: {.file {input}}",
+        "i" = "Check the file path and try again."
+      ))
+    }
+    
+    cli_alert_info("Detected CSV file input")
+    
     data <- read_csv(input, show_col_types = FALSE)
     
     if ("doi" %in% tolower(colnames(data))) {

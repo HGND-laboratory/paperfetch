@@ -18,17 +18,19 @@ Imports:
     dplyr,
     httr2,
     progress,
-    purrr,
     readr,
     rvest,
-    xml2
+    xml2,
+    magrittr
 Suggests: 
     bib2df,
     knitr,
+    mockery,
     pdftools,
     PRISMA2020,
     rmarkdown,
     synthesisr,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    withr
 VignetteBuilder: knitr
 Config/testthat/edition: 3

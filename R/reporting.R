@@ -1,5 +1,4 @@
 generate_acquisition_report <- function(log_data, report_file, email, id_type = "mixed") {
-  require(dplyr)
   
   # Calculate statistics
   total <- nrow(log_data)

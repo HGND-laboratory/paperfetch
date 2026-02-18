@@ -204,10 +204,6 @@ check_pdf_integrity <- function(output_folder,
                                 remove_invalid = FALSE,
                                 use_advanced = FALSE) {
   
-  require(cli)
-  require(dplyr)
-  require(readr)
-  
   # Get all PDF files
   pdf_files <- list.files(output_folder, pattern = "\\.pdf$", full.names = TRUE)
   

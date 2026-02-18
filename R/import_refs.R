@@ -6,14 +6,13 @@
 #'
 #' @param files Character vector of file paths to import. Supports:
 #'   \itemize{
-#'     \item \code{.bib} — BibTeX (Web of Science, Google Scholar)
-#'     \item \code{.ris} — RIS format (Scopus, Embase, PsycINFO)
-#'     \item \code{.txt} — Plain text (Cochrane, PubMed)
-#'     \item \code{.csv} — CSV exports (any database)
+#'     \item \code{.bib} - BibTeX (Web of Science, Google Scholar)
+#'     \item \code{.ris} - RIS format (Scopus, Embase, PsycINFO)
+#'     \item \code{.txt} - Plain text (Cochrane, PubMed)
+#'     \item \code{.csv} - CSV exports (any database)
 #'   }
 #' @param deduplicate Deduplicate references after import (default: TRUE)
-#' @param match_by Column(s) to use for deduplication. One of:
-#'   \code{"doi"} (default), \code{"title"}, or \code{c("doi", "title")}
+#' @param match_by Column to use for deduplication (default: "title")
 #' @param id_col Which column to use for PDF fetching: \code{"doi"} (default)
 #'   or \code{"pmid"}
 #' @param verbose Print import and deduplication details (default: TRUE)
@@ -60,12 +59,11 @@
 
 import_refs <- function(files,
                         deduplicate = TRUE,
-                        match_by    = "doi",
+                        match_by    = "title",
                         id_col      = "doi",
                         verbose     = TRUE) {
   
-  require(cli)
-  
+ 
   # Check synthesisr is available
   if (!requireNamespace("synthesisr", quietly = TRUE)) {
     cli_abort(c(
@@ -84,7 +82,7 @@ import_refs <- function(files,
     ))
   }
   
-  # ── Step 1: Import ────────────────────────────────────────────────────────────
+  # Step 1: Import 
   
   cli_h1("Importing References")
   
@@ -119,96 +117,79 @@ import_refs <- function(files,
     "Total records across {length(files)} file{?s}: {n_total}"
   )
   
-  # ── Step 2: Deduplicate ───────────────────────────────────────────────────────
+  # Step 2: Deduplicate
   
   if (deduplicate) {
     cli_h1("Deduplicating References")
     
-    # Check match column(s) exist
-    missing_cols <- match_by[!match_by %in% colnames(refs_combined)]
-    if (length(missing_cols) > 0) {
-      cli_alert_warning(
-        "Column{?s} not found: {.field {missing_cols}}. Falling back to {.field title}."
-      )
+    # Check if match_by column exists
+    if (!match_by %in% colnames(refs_combined)) {
+      cli_alert_warning("Column {.field {match_by}} not found. Falling back to {.field title}.")
       match_by <- "title"
     }
     
-    refs_deduped <- tryCatch({
-      synthesisr::deduplicate(
-        refs_combined,
-        match_variable = match_by,
-        method         = "string_osa"
+    refs_out <- tryCatch({
+      # Using 'Finer Control' method from synthesisr docs
+      dups <- synthesisr::find_duplicates(
+        refs_combined[[match_by]],
+        method = "string_osa",
+        rm_punctuation = TRUE,
+        to_lower = TRUE
       )
+      synthesisr::extract_unique_references(refs_combined, matches = dups)
     }, error = function(e) {
-      cli_alert_warning(
-        "Deduplication failed ({conditionMessage(e)}). Returning combined (non-deduplicated) refs."
-      )
+      cli_alert_warning("Deduplication failed: {conditionMessage(e)}. Returning non-deduplicated refs.")
       refs_combined
     })
     
-    n_dupes    <- n_total - nrow(refs_deduped)
-    n_unique   <- nrow(refs_deduped)
-    dupe_pct   <- (n_dupes / n_total) * 100
-    
-    cli_alert_success("Unique records after deduplication: {n_unique}")
-    cli_alert_info(
-      "Duplicates removed: {n_dupes} ({sprintf('%.1f%%', dupe_pct)})"
-    )
-    
-    refs_out <- refs_deduped
+    n_dupes <- n_total - nrow(refs_out)
+    cli_alert_success("Unique records after deduplication: {nrow(refs_out)}")
+    cli_alert_info("Duplicates removed: {n_dupes} ({sprintf('%.1f%%', (n_dupes/n_total)*100)})")
   } else {
     refs_out <- refs_combined
   }
   
-  # ── Step 3: Validate ID column ────────────────────────────────────────────────
-  
+  # Step 3: Validate ID column
   cli_h1("Checking Identifiers")
   
-  if (!id_col %in% colnames(refs_out)) {
-    cli_alert_warning(
-      "Column {.field {id_col}} not found in references."
-    )
+  # Find the actual column name (handles 'doi' vs 'DOI')
+  actual_id_col <- colnames(refs_out)[tolower(colnames(refs_out)) == tolower(id_col)][1]
+  
+  if (is.na(actual_id_col)) {
+    cli_alert_warning("Column {.field {id_col}} not found in references.")
     
-    # Suggest available ID columns
+    # Suggest available ID columns (Keep your great suggestion logic!)
     possible_id_cols <- intersect(
       colnames(refs_out),
       c("doi", "pmid", "pubmed_id", "PMID", "DOI", "url", "isbn")
     )
     
     if (length(possible_id_cols) > 0) {
-      cli_alert_info(
-        "Available identifier columns: {.field {possible_id_cols}}"
-      )
+      cli_alert_info("Available identifier columns: {.field {possible_id_cols}}")
     } else {
-      cli_alert_danger(
-        "No recognisable identifier columns found. Manual inspection required."
-      )
+      cli_alert_danger("No recognisable identifier columns found. Manual inspection required.")
     }
   } else {
-    ids       <- refs_out[[id_col]]
+    # Use the 'actual' column found
+    ids       <- refs_out[[actual_id_col]]
     n_ids     <- sum(!is.na(ids) & nchar(trimws(ids)) > 0)
-    n_missing <- sum( is.na(ids) | nchar(trimws(ids)) == 0)
+    n_missing <- nrow(refs_out) - n_ids
     
-    cli_alert_success(
-      "Records with {.field {id_col}}: {n_ids} / {nrow(refs_out)}"
-    )
+    cli_alert_success("Records with {.field {actual_id_col}}: {n_ids} / {nrow(refs_out)}")
     
     if (n_missing > 0) {
-      cli_alert_warning(
-        "{n_missing} record{?s} missing a {.field {id_col}} — these will be skipped during fetching."
-      )
+      cli_alert_warning("{n_missing} record{?s} missing a {.field {actual_id_col}}; these will be skipped during fetching.")
     }
   }
   
-  # ── Summary ───────────────────────────────────────────────────────────────────
-  
+  # Summary (Keep your clean bullet points)
   cli_rule()
   cli_alert_info("Import summary:")
   cli_bullets(c(
     " " = "Databases imported: {length(files)}",
     " " = "Total records (pre-dedup): {n_total}",
     " " = "Unique records: {nrow(refs_out)}",
-    " " = "Records with {id_col}: {if (id_col %in% colnames(refs_out)) sum(!is.na(refs_out[[id_col]])) else 'unknown'}"
+    " " = "Records with {id_col}: {if (!is.na(actual_id_col)) sum(!is.na(refs_out[[actual_id_col]])) else 'unknown'}"
   ))
   cli_rule()
   
@@ -268,8 +249,6 @@ fetch_refs_pdfs <- function(refs,
                             validate_pdfs  = TRUE,
                             remove_invalid = TRUE,
                             proxy          = NULL) {
-  
-  require(cli)
   
   if (!is.data.frame(refs)) {
     cli_abort("{.arg refs} must be a data frame (e.g. from {.fn import_refs}).")

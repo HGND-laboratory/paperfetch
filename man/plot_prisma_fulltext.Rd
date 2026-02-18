@@ -31,6 +31,9 @@ section of a PRISMA 2020 flow diagram, pre-filled with counts from
 your \code{as_prisma_counts()} output.
 }
 \details{
+Requires the \code{PRISMA2020} package. Install with:
+\code{install.packages("PRISMA2020")}
+
 The \code{previous_counts} argument accepts a named list for earlier
 PRISMA phases. Supported names:
 \itemize{
@@ -52,10 +55,10 @@ plot_prisma_fulltext(prisma_counts)
 plot_prisma_fulltext(
   prisma_counts,
   previous_counts = list(
-    database_results  = 892,
+    database_results   = 892,
     duplicates_removed = 238,
-    records_screened  = 654,
-    records_excluded  = 126
+    records_screened   = 654,
+    records_excluded   = 126
   ),
   save_path = "figures/prisma_diagram.png"
 )

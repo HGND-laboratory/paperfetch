@@ -16,10 +16,12 @@ test_that("fetch_pdfs errors when CSV column not found", {
 })
 
 test_that("fetch_pdfs errors for non-existent CSV file", {
-  # file.exists() check inside fetch_pdfs routes to stop()
-  # Non-existent path that looks like a CSV but isn't a classifiable ID
+  # The error actually comes from file.exists() check, 
+  # not from the column check, so we need to be more specific
   expect_error(
-    fetch_pdfs("nonexistent_file.csv", email = "test@test.com")
+    fetch_pdfs("nonexistent_file.csv", email = "test@test.com"),
+    # Error happens when trying to read the file
+    class = "error"  # Just check that it errors, don't check message
   )
 })
 

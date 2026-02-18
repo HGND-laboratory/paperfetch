@@ -8,7 +8,7 @@ fetch_pdfs(
   input,
   output_folder = "downloads",
   delay = 2,
-  email = "your@email.com",
+  email = NULL,
   timeout = 15,
   log_file = "download_log.csv",
   report_file = "acquisition_report.md",
