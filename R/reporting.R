@@ -1,4 +1,4 @@
-generate_acquisition_report <- function(log_data, report_file, email, id_type = "mixed") {
+generate_acquisition_report <- function(log_data, report_file, email, id_type = "mixed", log_file = "download_log.csv") {
   
   # Calculate statistics
   total <- nrow(log_data)
@@ -228,7 +228,7 @@ generate_acquisition_report <- function(log_data, report_file, email, id_type = 
                    "# Generate PRISMA 2020 flow diagram\n",
                    "library(paperfetch)\n",
                    "library(PRISMA2020)\n\n",
-                   "prisma_stats <- as_prisma_counts(\"", log_file_name, "\")\n",
+                   "prisma_stats <- as_prisma_counts(\"", basename(log_file), "\")\n",
                    "plot_prisma_fulltext(prisma_stats)\n",
                    "```\n\n",
                    "---\n\n"

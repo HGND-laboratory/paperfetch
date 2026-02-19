@@ -41,7 +41,7 @@ fetch_pdfs_from_doi <- function(csv_file_path,
   email <- resolve_email(email)
   
   # Read and validate CSV
-  doi_data <- read_csv(csv_file_path, show_col_types = FALSE)
+  doi_data <- suppressMessages(read_csv(csv_file_path, show_col_types = FALSE))
   if (!"doi" %in% colnames(doi_data)) {
     stop("The CSV file does not contain a 'doi' column.")
   }
@@ -404,7 +404,7 @@ fetch_pdfs_from_doi <- function(csv_file_path,
     log_data <- read_csv(log_file, show_col_types = FALSE)
   }
   
-  generate_acquisition_report(log_data, report_file, email, "doi")
+  generate_acquisition_report(log_data, report_file, email, "doi", log_file)
   cli_alert_success("Acquisition report saved to: {report_file}")
   cli_alert_info("Download process completed!")
   

@@ -76,7 +76,7 @@ as_prisma_counts <- function(log_file, verbose = TRUE) {
   active       <- log_data[is.na(log_data$status)  | log_data$status != "exists", ]
   
   # Core PRISMA counts
-  n_sought     <- nrow(active)
+  n_sought        <- nrow(active)
   n_not_retrieved <- sum(active$success == FALSE, na.rm = TRUE)
   
   # Invalid PDFs — only counted if validation was run
@@ -228,35 +228,88 @@ plot_prisma_fulltext <- function(prisma_counts,
     ))
   }
   
-  # Build PRISMA data template
-  prisma_template <- PRISMA2020::PRISMA_data(
-    
-    # ── Identification phase ──────────────────────────────────────────────────
-    database_results   = previous_counts$database_results  %||% NA,
-    register_results   = previous_counts$register_results  %||% NA,
-    
-    # ── Screening phase ───────────────────────────────────────────────────────
-    duplicates         = previous_counts$duplicates_removed %||% NA,
-    records_screened   = previous_counts$records_screened   %||% NA,
-    records_excluded   = previous_counts$records_excluded   %||% NA,
-    
-    # ── Full-text retrieval phase (filled by paperfetch) ─────────────────────
-    dbr_sought_reports = prisma_counts$reports_sought_retrieval,
-    dbr_notretrieved   = prisma_counts$reports_not_retrieved,
-    
-    # ── Inclusion phase ───────────────────────────────────────────────────────
-    dbr_assessed       = prisma_counts$reports_acquired,
-    dbr_excluded       = prisma_counts$reports_excluded_invalid %||% 0
+  # ── Build the data frame that PRISMA_data() expects ──────────────────────────
+  #
+  # PRISMA_data() requires the full template data frame (all 8 columns, 32 rows)
+  # that ships with the package. We load it, then overwrite only the `n` values
+  # for the rows we care about. This is version-safe because we never construct
+  # the data frame from scratch.
+  
+  csv_path <- system.file("extdata", "PRISMA.csv", package = "PRISMA2020")
+  if (!nzchar(csv_path)) {
+    cli_abort("Could not find PRISMA.csv inside the PRISMA2020 package installation.")
+  }
+  prisma_df <- read.csv(csv_path, stringsAsFactors = FALSE)
+  
+  # Helper to set n for a named row (matched on the `data` column)
+  set_n <- function(df, row_name, value) {
+    idx <- which(df$data == row_name)
+    if (length(idx) > 0 && !is.null(value) && !is.na(value)) {
+      df$n[idx] <- as.character(value)
+    }
+    df
+  }
+  
+  # ── Identification phase (from previous_counts if supplied) ──────────────────
+  prisma_df <- set_n(prisma_df, "database_results",  previous_counts$database_results  %||% NULL)
+  prisma_df <- set_n(prisma_df, "register_results",  previous_counts$register_results  %||% NULL)
+  prisma_df <- set_n(prisma_df, "duplicates",        previous_counts$duplicates_removed %||% NULL)
+  
+  # ── Screening phase ───────────────────────────────────────────────────────────
+  prisma_df <- set_n(prisma_df, "records_screened",  previous_counts$records_screened  %||% NULL)
+  prisma_df <- set_n(prisma_df, "records_excluded",  previous_counts$records_excluded  %||% NULL)
+  
+  # Full-text retrieval phase (filled by paperfetch)
+  prisma_df <- set_n(prisma_df, "dbr_sought_reports",       prisma_counts$reports_sought_retrieval)
+  prisma_df <- set_n(prisma_df, "dbr_notretrieved_reports", prisma_counts$reports_not_retrieved)
+  prisma_df <- set_n(prisma_df, "dbr_assessed",             prisma_counts$reports_acquired)
+  
+  # Inclusion phase
+  prisma_df <- set_n(prisma_df, "new_studies", prisma_counts$reports_acquired)
+  
+  # Parse through PRISMA_data() exactly as the official example:
+  #   data <- read.csv(csvFile); data <- PRISMA_data(data); PRISMA_flowdiagram(data)
+  prisma_template <- PRISMA2020::PRISMA_data(prisma_df)
+  
+  # Fix dbr_excluded AFTER PRISMA_data() runs.
+  # PRISMA_data() populates $dbr_excluded as a 3-row data.frame with placeholder
+  # reasons ("Reason1", "Reason2", "Reason3") all with n = NA.
+  # The flowdiagram pastes all rows into a label string, so str_count("\n")
+  # returns a length-3 vector, which crashes PRISMA_get_height_(n, offset)
+  # with "argument is of length > 1".
+  # Fix: replace with exactly ONE row so str_count() always returns a scalar.
+  n_excluded <- prisma_counts$reports_excluded_invalid %||% 0L
+  prisma_template$dbr_excluded <- if (n_excluded == 0) {
+    data.frame(reason = "None", n = NA_character_, stringsAsFactors = FALSE)
+  } else {
+    data.frame(reason = "Invalid PDF", n = as.character(n_excluded), stringsAsFactors = FALSE)
+  }
+  prisma_template$other_excluded <- data.frame(
+    reason = "None", n = NA_character_, stringsAsFactors = FALSE
+  )
+  prisma_template$database_specific_results <- data.frame(
+    results = character(0), n = character(0), stringsAsFactors = FALSE
+  )
+  prisma_template$register_specific_results <- data.frame(
+    results = character(0), n = character(0), stringsAsFactors = FALSE
   )
   
   # Generate the flow diagram
   diagram <- PRISMA2020::PRISMA_flowdiagram(
     data        = prisma_template,
-    interactive = interactive
+    interactive = interactive,
+    previous    = FALSE,
+    other       = FALSE
   )
   
   # Save if requested
   if (!is.null(save_path)) {
+    # Create parent directory if it doesn't exist
+    save_dir <- dirname(save_path)
+    if (!dir.exists(save_dir)) {
+      dir.create(save_dir, recursive = TRUE)
+    }
+    
     ext <- tolower(tools::file_ext(save_path))
     
     if (ext == "png") {

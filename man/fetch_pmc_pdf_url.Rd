@@ -19,13 +19,14 @@ fetch_pmc_pdf_url(doi, email, user_agent, timeout = 15, proxy = NULL)
 }
 \value{
 A list with fields:
-\item{pdf_url}{PMC PDF URL string, or NULL if not found}
+\item{pdf_url}{Europe PMC PDF URL, or NULL if not found}
 \item{article_url}{PMC article landing page URL, or NULL}
 \item{pmc_id}{PMC ID string e.g. "PMC1234567", or NULL}
 }
 \description{
 Given a DOI, queries the NCBI E-utilities API to find a linked PMC article,
-then constructs the PMC PDF URL. Returns the PMC PDF URL if found, or NULL.
-This is used as a fallback in fetch_pdfs_from_doi() when Unpaywall and
-journal scraping both fail.
+then returns a Europe PMC direct PDF URL for download. Uses the
+Europe PMC ptpmcrender endpoint which serves PDFs as application/pdf
+without requiring JS rendering or scraping.
+Used as a fallback in fetch_pdfs_from_doi() when Unpaywall fails.
 }
