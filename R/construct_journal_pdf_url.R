@@ -71,11 +71,9 @@ construct_journal_pdf_url <- function(doi) {
   }
   
   # ── MDPI ───────────────────────────────────────────────────────────────────
-  # Pattern: https://www.mdpi.com/{doi}/pdf
-  # Covers: Nutrients (10.3390/nu), Cancers, IJMS, and all other MDPI journals
-  if (grepl("^10\\.3390/", doi)) {
-    return(paste0("https://www.mdpi.com/", doi, "/pdf"))
-  }
+  # MDPI PDF URLs use a journal/volume/issue/page structure with a dynamic
+  # ?version= timestamp — neither is derivable from the DOI alone.
+  # DOI resolution + citation_pdf_url meta tag scraping (Step 2) handles these.
   
   # ── No known pattern ───────────────────────────────────────────────────────
   return(NULL)

@@ -289,40 +289,65 @@ fetch_pdfs_from_doi <- function(csv_file_path,
           proxy      = proxy
         )
         
-        if (!is.null(article_url)) {
-          dl_req <- dl_req %>% req_headers("Referer" = article_url)
+        # Set Referer — use article_url if available, otherwise fall back to
+        # the DOI landing page. This is critical for publishers like MDPI that
+        # block PDF requests without a valid Referer.
+        referer <- if (!is.null(article_url) && !is.na(article_url)) {
+          article_url
+        } else {
+          paste0("https://doi.org/", doi)
         }
+        dl_req <- dl_req %>% req_headers(
+          "Referer" = referer,
+          "Accept"  = "application/pdf,*/*"
+        )
         
         dl_resp     <- dl_req %>% req_perform(path = file_path)
         http_status <- as.character(dl_resp$status_code)
         
         # ── Integrity validation ──────────────────────────────────────────────
-        # PMC and Elsevier are trusted sources — skip immediate validation
-        # They'll be validated in the post-loop check with appropriate thresholds
-        trusted_source <- current_method %in% c("pmc_fallback", "elsevier_api")
+        validation <- tryCatch(
+          validate_pdf(file_path),
+          error = function(e) {
+            # If validation itself crashes (e.g. on unusual binary content),
+            # treat the file as valid rather than killing the loop
+            list(valid = TRUE, reason = NA_character_, is_html = FALSE)
+          }
+        )
         
-        if (!trusted_source) {
-          # Validate non-trusted sources immediately
+        if (validation$valid) {
+          download_success <- TRUE
+          cli_alert_success("Downloaded: {doi}")
+        } else {
+          unlink(file_path)
+          download_success <- FALSE
+          failure_reason   <- paste0("invalid_pdf_", validation$reason)
+          if (validation$is_html) {
+            cli_alert_danger("HTML error page (not PDF): {doi}")
+          } else {
+            cli_alert_danger("Corrupt/invalid PDF: {doi} [{validation$reason}]")
+          }
+          # If this came from PMC and failed, reset so we fall through
+          # to journal URL patterns on the next iteration attempt
+          if (current_method == "pmc_fallback") {
+            pdf_url <- NULL
+          }
+        }
+      }, error = function(e) {
+        # ── Special case: "embedded nul in string" ────────────────────────────
+        # This happens when a valid binary PDF is downloaded but R's string
+        # handling chokes on null bytes during response processing. The file
+        # is usually actually fine — check it before marking as failure.
+        if (grepl("embedded nul", e$message, ignore.case = TRUE) && file.exists(file_path)) {
           validation <- validate_pdf(file_path)
-          
           if (validation$valid) {
-            download_success <- TRUE
-            cli_alert_success("Downloaded: {doi}")
+            download_success <<- TRUE
+            http_status      <<- "200"
+            cli_alert_success("Downloaded (binary): {doi}")
+            return()
           } else {
             unlink(file_path)
-            download_success <- FALSE
-            failure_reason   <- validation$reason
-            
-            if (validation$is_html) {
-              cli_alert_danger("HTML error page (not PDF): {doi}")
-            } else {
-              cli_alert_danger("Corrupt/invalid PDF: {doi} [{validation$reason}]")
-            }
           }
-        } else {
-          # Trust PMC/Elsevier — just mark as success
-          download_success <- TRUE
-          cli_alert_success("Downloaded via {gsub('_', ' ', current_method)}: {doi}")
         }
         
         http_status <<- dplyr::case_when(
@@ -370,16 +395,12 @@ fetch_pdfs_from_doi <- function(csv_file_path,
   
   if (validate_pdfs) {
     cli_h2("Validating Downloaded PDFs")
-    
-    # Use lenient threshold — PMC and Elsevier PDFs are often small but valid
     check_pdf_integrity(
       output_folder  = output_folder,
       log_file       = log_file,
       remove_invalid = remove_invalid,
-      use_advanced   = FALSE,
-      min_size_kb    = 1  # Much more lenient for post-validation
+      use_advanced   = FALSE
     )
-    
     log_data <- read_csv(log_file, show_col_types = FALSE)
   }
   

@@ -5,3 +5,5 @@
 .Renviron
 .Rproj
 downloads/
+download_log.csv
+unfetched.txt

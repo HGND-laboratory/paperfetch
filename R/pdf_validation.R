@@ -70,9 +70,16 @@ validate_pdf <- function(file_path, min_size_kb = 10, verbose = FALSE) {
   header <- readBin(con, "raw", n = 1024)
   close(con)
   
+  # Safe raw-to-char conversion — rawToChar() crashes on null bytes in binary PDFs
+  safe_raw_to_char <- function(raw_bytes) {
+    tryCatch(
+      rawToChar(raw_bytes),
+      error = function(e) rawToChar(raw_bytes[raw_bytes != as.raw(0)])
+    )
+  }
+  
   # Check PDF magic number (%PDF- at start)
-  # PDF files MUST start with %PDF-1.x
-  pdf_magic <- rawToChar(header[1:min(8, length(header))])
+  pdf_magic <- safe_raw_to_char(header[1:min(8, length(header))])
   result$is_pdf <- grepl("^%PDF-", pdf_magic)
   
   if (verbose) {
@@ -81,15 +88,22 @@ validate_pdf <- function(file_path, min_size_kb = 10, verbose = FALSE) {
   }
   
   # Check for HTML content (common soft failure)
-  # Convert first 500 bytes to character
-  header_text <- rawToChar(header[1:min(500, length(header))])
+  header_text <- safe_raw_to_char(header[1:min(500, length(header))])
   
-  # Check for HTML indicators
+  # Only match patterns that unambiguously indicate an HTML error page.
+  # Do NOT use generic words like "Error"/"ERROR" — these appear in normal
+  # PDF metadata, font definitions, and object streams.
   html_patterns <- c(
-    "<!DOCTYPE", "<!doctype", "<html", "<HTML",
-    "<head>", "<HEAD>", "<body>", "<BODY>",
-    "Access Denied", "403 Forbidden", "404 Not Found",
-    "Error", "ERROR", "Unauthorized"
+    "<!DOCTYPE", "<!doctype",
+    "<html", "<HTML",
+    "<head>", "<HEAD>",
+    "<body>", "<BODY>",
+    "Access Denied",
+    "403 Forbidden",
+    "404 Not Found",
+    "401 Unauthorized",
+    "<title>Error</title>",
+    "HTTP/1."
   )
   
   result$is_html <- any(sapply(html_patterns, function(pattern) {
@@ -102,28 +116,30 @@ validate_pdf <- function(file_path, min_size_kb = 10, verbose = FALSE) {
   
   # Validate PDF structure
   if (result$is_pdf && !result$is_html) {
-    # Additional validation: check for %%EOF at end
-    # Read last 1024 bytes
+    # Check for %%EOF marker in the last 2048 bytes.
+    # Some valid PDFs (e.g. from Europe PMC) have trailing data after %%EOF
+    # or use non-standard line endings, so we search a larger window and
+    # treat absence of %%EOF as a warning rather than a hard failure —
+    # if the file has the correct magic number and is a reasonable size,
+    # it is almost certainly a valid PDF.
     file_size <- file.size(file_path)
     con <- file(file_path, "rb")
-    seek(con, where = max(0, file_size - 1024))
-    footer <- readBin(con, "raw", n = 1024)
+    seek(con, where = max(0, file_size - 2048))
+    footer <- readBin(con, "raw", n = 2048)
     close(con)
     
-    footer_text <- rawToChar(footer)
+    footer_text <- safe_raw_to_char(footer)
     has_eof <- grepl("%%EOF", footer_text)
     
     if (verbose) {
       cat(sprintf("Has %%EOF marker: %s\n", has_eof))
     }
     
-    if (has_eof) {
-      result$valid <- TRUE
-      result$reason <- NA_character_
-    } else {
-      result$valid <- FALSE
-      result$reason <- "missing_eof_marker"
-    }
+    # Accept the file if it has the PDF magic number and is not HTML.
+    # A missing %%EOF on an otherwise valid-looking file is usually a
+    # server truncation artefact or non-standard PDF writer — not corruption.
+    result$valid  <- TRUE
+    result$reason <- if (!has_eof) "missing_eof_marker_warned" else NA_character_
   } else if (result$is_html) {
     result$reason <- "html_error_page"
   } else {

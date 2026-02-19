@@ -1,9 +1,10 @@
 #' Look up and download a PDF from PubMed Central via DOI
 #'
 #' Given a DOI, queries the NCBI E-utilities API to find a linked PMC article,
-#' then constructs the PMC PDF URL. Returns the PMC PDF URL if found, or NULL.
-#' This is used as a fallback in fetch_pdfs_from_doi() when Unpaywall and
-#' journal scraping both fail.
+#' then returns a Europe PMC direct PDF URL for download. Uses the
+#' Europe PMC ptpmcrender endpoint which serves PDFs as application/pdf
+#' without requiring JS rendering or scraping.
+#' Used as a fallback in fetch_pdfs_from_doi() when Unpaywall fails.
 #'
 #' @param doi A single DOI string
 #' @param email Email for NCBI API identification
@@ -12,7 +13,7 @@
 #' @param proxy Proxy URL or NULL
 #'
 #' @return A list with fields:
-#'   \item{pdf_url}{PMC PDF URL string, or NULL if not found}
+#'   \item{pdf_url}{Europe PMC PDF URL, or NULL if not found}
 #'   \item{article_url}{PMC article landing page URL, or NULL}
 #'   \item{pmc_id}{PMC ID string e.g. "PMC1234567", or NULL}
 
@@ -84,39 +85,20 @@ fetch_pmc_pdf_url <- function(doi, email, user_agent, timeout = 15, proxy = NULL
     pmc_num  <- pmc_links[[1]]  # numeric PMC ID e.g. 9234567
     pmc_id   <- paste0("PMC", pmc_num)
     
-    # ── Step 3: Resolve actual PDF filename via redirect ──────────────────────
-    # PMC serves PDFs from pmc.ncbi.nlm.nih.gov (not www.ncbi.nlm.nih.gov).
-    # The /pdf/ path redirects to the real filename e.g. /pdf/zjae112.pdf.
-    # PMC may need a few seconds server-side to prepare the file, so we retry.
-    article_url  <- paste0("https://pmc.ncbi.nlm.nih.gov/articles/", pmc_id, "/")
-    pdf_base_url <- paste0("https://pmc.ncbi.nlm.nih.gov/articles/", pmc_id, "/pdf/")
-    pdf_url      <- NULL
+    # ── Step 3: Construct Europe PMC PDF URL ──────────────────────────────────
+    # Europe PMC's ptpmcrender endpoint serves the PDF directly as
+    # application/pdf — no JS rendering, no scraping, fully constructable.
+    # NCBI efetch (rettype=pdf) returns XML not PDF despite the parameter name.
+    article_url <- paste0("https://pmc.ncbi.nlm.nih.gov/articles/", pmc_id, "/")
+    pdf_url     <- paste0(
+      "https://europepmc.org/backend/ptpmcrender.fcgi",
+      "?accid=", pmc_id,
+      "&blobtype=pdf"
+    )
     
-    for (attempt in seq_len(3)) {
-      tryCatch({
-        redirect_resp <- build_request(
-          url        = pdf_base_url,
-          user_agent = user_agent,
-          timeout    = timeout,
-          proxy      = proxy
-        ) %>%
-          req_perform()
-        
-        final_url <- resp_url(redirect_resp)
-        
-        # If redirect resolved to a real PDF filename, use it
-        if (grepl("\\.pdf$", final_url, ignore.case = TRUE)) {
-          pdf_url <- final_url
-        } else {
-          pdf_url <- pdf_base_url  # let downloader try the base URL anyway
-        }
-      }, error = function(e) {
-        if (attempt < 3) Sys.sleep(5)  # wait for PMC to prepare the PDF
-      })
-      if (!is.null(pdf_url)) break
-    }
-    
-    if (is.null(pdf_url)) pdf_url <- pdf_base_url  # last resort
+    result$pmc_id      <- pmc_id
+    result$article_url <- article_url
+    result$pdf_url     <- pdf_url
     
     result$pmc_id      <- pmc_id
     result$article_url <- article_url

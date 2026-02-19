@@ -20,7 +20,7 @@ methods section.
 ✅ **PDF integrity validation** — Detects HTML error pages and corrupt files disguised as PDFs  
 ✅ **PRISMA 2020 integration** — Direct bridge to `PRISMA2020` flow diagrams  
 ✅ **Multi-database import** — Works with Web of Science, Scopus, Cochrane, and more  
-✅ **Multi-source fallback** — Unpaywall → PMC → Elsevier TDM API → DOI resolution → Citation scraping → Journal URL patterns (NEJM, Lancet, MDPI)  
+✅ **Multi-source fallback** — Unpaywall → PMC (Europe PMC) → Elsevier TDM API → DOI resolution → Citation scraping → Journal URL patterns (NEJM, Lancet)  
 
 ### How paperfetch compares
 
@@ -63,6 +63,19 @@ install.packages("pdftools")
 ---
 
 ## Quick Start
+
+> ⚠️ **Email is required.** Unpaywall and NCBI both require a valid email address by their terms of service. Without it, requests may be rate-limited or blocked. Set it once in `.Renviron` (see [Setup](#setup-recommended)) so you never have to type it again.
+
+### Option A — From a database export CSV (recommended)
+```r
+library(paperfetch)
+
+# Import references and fetch PDFs in one pipeline
+import_refs("inst/extdata/csv-painANDgen-set.csv") |>
+  fetch_refs_pdfs(email = Sys.getenv("PAPERFETCH_EMAIL"))
+```
+
+### Option B — From a CSV of DOIs directly
 ```r
 library(paperfetch)
 
@@ -425,7 +438,7 @@ write.csv(
 | `paywalled` | Journal returned 403 — subscription required | Use institutional proxy or request via library |
 | `no_pdf_found` | No PDF URL found by any method | Check DOI is correct; paper may be preprint-only |
 | `file_too_small` | Downloaded file is too small to be a real PDF — likely an HTML redirect or login page | Usually resolves after PMC fix; otherwise paywalled |
-| `missing_eof_marker` | PDF truncated mid-download | Retry with `timeout = 30`; may be a slow server |
+| `missing_eof_marker` | PDF downloaded but `%%EOF` marker not found in last 2KB — common with Europe PMC and some repositories | File is accepted as valid with a warning; open manually to verify |
 | `elsevier_no_entitlement` | Elsevier API key set but no institutional token | Request `ELSEVIER_INSTTOKEN` from your library |
 | `elsevier_unauthorized` | Elsevier API key invalid or expired | Check `ELSEVIER_API_KEY` in `.Renviron` |
 | `not_found` | URL returned 404 — article not at expected location | PMC record exists but no PDF deposited; paper will fall through to journal scraping |
@@ -447,7 +460,12 @@ timeouts <- log[grepl("timeout|missing_eof", log$failure_reason), "id"]
 fetch_pdfs(timeouts, timeout = 30)
 ```
 
-### High rate of `file_too_small` or `missing_eof_marker`
+### MDPI journals returning `paywalled` despite being open access
+MDPI uses Akamai bot detection that blocks all automated HTTP requests — including headless browsers (`chromote`, `pagedown`) — because they lack the verified human telemetry (mouse movements, cookies, TLS fingerprint) that Akamai requires. This affects all MDPI journals (`10.3390/`) regardless of OA status.
+
+**Workaround:** Use Zotero, which maintains a verified browser session that passes Akamai's checks. Zotero API integration is planned for v0.2.0. In the meantime, download MDPI papers manually or via your institutional library.
+
+### `paywalled` on journals that should be open access
 - Common with PMC when the server needs time to prepare the PDF — this is handled automatically with retries, but very new articles may not have their PDF ready yet
 - Also common with Elsevier/Wiley anti-bot responses when no API key is set
 - Check `pdf_invalid_reason` column in `download_log.csv`
@@ -495,20 +513,21 @@ HTML report output, PDF metadata extraction, institutional repository support.
 - ✅ PRISMA 2020 integration via `as_prisma_counts()` and `plot_prisma_fulltext()`
 - ✅ Proxy and VPN support
 - ✅ `.Renviron` credential management
-- ✅ PMC fallback via NCBI E-utilities with redirect resolution and retry logic
+- ✅ PMC fallback via NCBI E-utilities + Europe PMC direct PDF endpoint
 - ✅ Elsevier TDM API support (Lancet, Cell, EJCA, and all Elsevier journals)
-- ✅ Journal-specific URL patterns (NEJM, Lancet family, MDPI)
+- ✅ Journal-specific URL patterns (NEJM, Lancet family)
 - ✅ Graceful handling of `embedded nul` binary PDF downloads
 - ✅ PMC 404 fallthrough — articles without a deposited PDF fall back to journal scraping
+- ✅ PDF validation hardened — `%%EOF` absence no longer rejects valid PDFs
 
 **v0.2.0 (Planned)**
+- [ ] Zotero API integration — bridge for Akamai-protected publishers (MDPI, Wiley) that block all automated requests including headless browsers; Zotero's verified browser session can retrieve these
 - [ ] arXiv and bioRxiv support
 - [ ] Optional interactive HTML reports
 - [ ] Built-in parallel downloads
 - [ ] Automatic retry for failed downloads
 
 **v0.3.0 (Planned)**
-- [ ] Zotero API integration
 - [ ] Institutional repository support
 - [ ] Shiny GUI
 - [ ] Publisher-specific optimisations
@@ -561,7 +580,7 @@ MIT — see `LICENSE` for details.
 
 ## Contact
 
-**Maintainer:** Kaalindi Misra
+**Maintainer:** Kaalindi Misra 
 **GitHub:** https://github.com/HGND-laboratory/paperfetch  
 **Issues:** https://github.com/HGND-laboratory/paperfetch/issues
 
@@ -576,6 +595,7 @@ Built with [httr2](https://httr2.r-lib.org/), [rvest](https://rvest.tidyverse.or
 Data sources: [Unpaywall](https://unpaywall.org),
 [PubMed Central](https://www.ncbi.nlm.nih.gov/pmc/),
 [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/),
+[Europe PMC](https://europepmc.org),
 [Elsevier TDM API](https://dev.elsevier.com).
 
 Integrations: [synthesisr](https://github.com/mjwestgate/synthesisr),
