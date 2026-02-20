@@ -163,6 +163,52 @@ as_prisma_counts <- function(log_file, verbose = TRUE) {
 }
 
 
+#' Normalize PRISMA Structure
+#'
+#' Internal helper to fix multi-row data frames that break PRISMA_flowdiagram().
+#' Collapses data frames with "reason" and "n" columns into single-row format
+#' with newline-separated values. Handles NULL, empty, and multi-row cases.
+#'
+#' @param x A list element from PRISMA_data() output
+#' @return The normalized element (single-row data frame or unchanged)
+#' @noRd
+normalize_prisma_structure <- function(x) {
+  if (is.data.frame(x) && all(c("reason", "n") %in% names(x))) {
+    
+    # Handle NULL or empty reason
+    if (is.null(x$reason) || length(x$reason) == 0) {
+      x$reason <- ""
+    }
+    
+    # Handle NULL or empty n
+    if (is.null(x$n) || length(x$n) == 0) {
+      x$n <- ""
+    }
+    
+    # Ensure at least one row
+    if (nrow(x) == 0) {
+      x <- data.frame(
+        reason = "",
+        n = "",
+        stringsAsFactors = FALSE
+      )
+    }
+    
+    # **KEY FIX**: Collapse multiple rows into single row with newlines
+    # This prevents str_count() from returning length > 1 vectors that break
+    # the condition in PRISMA_get_height_()
+    if (nrow(x) > 1) {
+      x <- data.frame(
+        reason = paste(x$reason, collapse = "\n"),
+        n = paste(x$n, collapse = "\n"),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  x
+}
+
+
 #' Generate PRISMA 2020 Full-Text Retrieval Flow Diagram
 #'
 #' Uses the \code{PRISMA2020} package to generate the full-text retrieval
@@ -192,6 +238,7 @@ as_prisma_counts <- function(log_file, verbose = TRUE) {
 #'   \item \code{records_excluded} — Records excluded at screening
 #' }
 #'
+#' @importFrom utils read.csv
 #' @export
 #'
 #' @examples
@@ -228,6 +275,23 @@ plot_prisma_fulltext <- function(prisma_counts,
     ))
   }
   
+  # **CRITICAL FIX**: Patch PRISMA_get_height_ to handle vector inputs
+  # This prevents "condition has length > 1" errors that occur when
+  # PRISMA2020 internal code creates label vectors from data frames
+  utils::assignInNamespace(
+    "PRISMA_get_height_",
+    function(n, offset, min = 2) {
+      lines <- max(n) + 1  # Handle vector inputs by taking max
+      if (lines > min) {
+        height <- offset + (lines * 0.25) - (min * 0.25)
+      } else {
+        height <- offset
+      }
+      return(height)
+    },
+    ns = "PRISMA2020"
+  )
+  
   # ── Build the data frame that PRISMA_data() expects ──────────────────────────
   #
   # PRISMA_data() requires the full template data frame (all 8 columns, 32 rows)
@@ -239,7 +303,7 @@ plot_prisma_fulltext <- function(prisma_counts,
   if (!nzchar(csv_path)) {
     cli_abort("Could not find PRISMA.csv inside the PRISMA2020 package installation.")
   }
-  prisma_df <- read.csv(csv_path, stringsAsFactors = FALSE)
+  prisma_df <- utils::read.csv(csv_path, stringsAsFactors = FALSE)
   
   # Helper to set n for a named row (matched on the `data` column)
   set_n <- function(df, row_name, value) {
@@ -271,34 +335,47 @@ plot_prisma_fulltext <- function(prisma_counts,
   #   data <- read.csv(csvFile); data <- PRISMA_data(data); PRISMA_flowdiagram(data)
   prisma_template <- PRISMA2020::PRISMA_data(prisma_df)
   
-  # Fix dbr_excluded AFTER PRISMA_data() runs.
-  # PRISMA_data() populates $dbr_excluded as a 3-row data.frame with placeholder
-  # reasons ("Reason1", "Reason2", "Reason3") all with n = NA.
-  # The flowdiagram pastes all rows into a label string, so str_count("\n")
-  # returns a length-3 vector, which crashes PRISMA_get_height_(n, offset)
-  # with "argument is of length > 1".
-  # Fix: replace with exactly ONE row so str_count() always returns a scalar.
+  # Apply normalization to ALL data frames in the template to prevent
+  # "argument is of length > 1" errors in PRISMA_get_height_()
+  prisma_template <- lapply(prisma_template, normalize_prisma_structure)
+  
+  # Fix multi-row data frames AFTER PRISMA_data() runs.
+  # PRISMA_data() populates these as 3-row data frames with placeholder reasons.
+  # PRISMA_flowdiagram() pastes all rows into a label string and calls
+  # stringr::str_count(label, "\n") — returning a length-3 vector, crashing
+  # PRISMA_get_height_() with "argument is of length > 1".
+  # Fix: collapse ALL multi-row data frames to exactly ONE row.
   n_excluded <- prisma_counts$reports_excluded_invalid %||% 0L
+  
   prisma_template$dbr_excluded <- if (n_excluded == 0) {
-    data.frame(reason = "None", n = NA_character_, stringsAsFactors = FALSE)
+    data.frame(reason = "None", n = "0", stringsAsFactors = FALSE)
   } else {
-    data.frame(reason = "Invalid PDF", n = as.character(n_excluded), stringsAsFactors = FALSE)
+    data.frame(
+      reason = "Invalid PDF (failed integrity check)",
+      n      = as.character(n_excluded),
+      stringsAsFactors = FALSE
+    )
   }
+  
   prisma_template$other_excluded <- data.frame(
-    reason = "None", n = NA_character_, stringsAsFactors = FALSE
+    reason = "None", n = "0", stringsAsFactors = FALSE
   )
+  
   prisma_template$database_specific_results <- data.frame(
-    results = character(0), n = character(0), stringsAsFactors = FALSE
+    reason = "All databases",
+    n      = as.character(prisma_counts$reports_sought_retrieval),
+    stringsAsFactors = FALSE
   )
+  
   prisma_template$register_specific_results <- data.frame(
-    results = character(0), n = character(0), stringsAsFactors = FALSE
+    reason = "None", n = "0", stringsAsFactors = FALSE
   )
   
   # Generate the flow diagram
   diagram <- PRISMA2020::PRISMA_flowdiagram(
     data        = prisma_template,
     interactive = interactive,
-    previous    = FALSE,
+    previous    = !is.null(previous_counts),
     other       = FALSE
   )
   
