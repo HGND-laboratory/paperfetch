@@ -11,6 +11,22 @@ methods section.
 
 ---
 
+## 🆕 Recent Updates (v0.1.1)
+
+### 🚀 Overview
+This patch addresses a critical logical error in the PRISMA flowchart generation and ensures full compatibility with R's namespace requirements.
+
+### 🛠 Fixes & Improvements
+* **Fix Logic Error**: Resolved the `condition has length > 1` error in `PRISMA_get_height_` by ensuring the line count is evaluated as a single scalar value.
+* **Namespace Resolution**: Added explicit imports for `utils::read.csv` and `utils::assignInNamespace` to satisfy `R CMD check` and improve package stability.
+* **Data Handling**: Improved handling of multi-line labels in the PRISMA diagram boxes to prevent vectorization conflicts during coordinate calculation.
+
+### 📦 Maintenance
+* Updated repository remote URL to reflect the name change to `paperfetch`.
+* Incremented version to `0.1.1`.
+
+---
+
 ## Why paperfetch?
 
 ### No other R package provides:
@@ -70,8 +86,8 @@ install.packages("pdftools")
 ```r
 library(paperfetch)
 
-# Import references and fetch PDFs in one pipeline
-import_refs("inst/extdata/csv-painANDgen-set.csv") |>
+# Use the included example dataset from PubMed (pain and genetics literature)
+import_refs("inst/extdata/csv/csv-painANDgen-set.csv") |>
   fetch_refs_pdfs(email = Sys.getenv("PAPERFETCH_EMAIL"))
 ```
 
@@ -79,8 +95,9 @@ import_refs("inst/extdata/csv-painANDgen-set.csv") |>
 ```r
 library(paperfetch)
 
+# Use the included example DOI list for testing
 fetch_pdfs(
-  input       = "my_references.csv",
+  input       = "inst/extdata/dois.csv",
   email       = "you@institution.edu",
   log_file    = "download_log.csv",
   report_file = "acquisition_report.md"
@@ -92,6 +109,15 @@ After completion you will have:
 1. ✅ **Downloaded PDFs** in `downloads/`
 2. 📋 **`download_log.csv`** — Complete acquisition audit trail
 3. 📄 **`acquisition_report.md`** — PRISMA-ready summary with counts for your manuscript
+
+### 🧪 Example Datasets Included
+
+The package includes two example datasets for testing:
+
+| File | Description | Use Case |
+|------|-------------|----------|
+| `inst/extdata/dois.csv` | Simple DOI list | Quick testing of `fetch_pdfs()` |
+| `inst/extdata/csv/csv-painANDgen-set.csv` | PubMed export (pain & genetics) | Full workflow with `import_refs()` |
 
 ---
 
@@ -505,7 +531,13 @@ HTML report output, PDF metadata extraction, institutional repository support.
 
 ## Roadmap
 
-**v0.1.0 (Current)**
+**v0.1.1 (Current)** — Patch Release
+- ✅ Fixed critical `PRISMA_get_height_` logic error (`condition has length > 1`)
+- ✅ Added proper namespace imports for R CMD check compliance
+- ✅ Improved multi-line label handling in PRISMA diagrams
+- ✅ Repository name updated to `paperfetch`
+
+**v0.1.0** — Initial Release
 - ✅ `fetch_pdfs()`, `fetch_pdfs_from_doi()`, `fetch_pdfs_from_pmids()`
 - ✅ Structured CSV logging and PRISMA-compliant reports
 - ✅ PDF integrity validation (basic and advanced)
@@ -549,6 +581,10 @@ paperfetch/
 │   ├── pdf_validation.R
 │   ├── reporting.R
 │   └── utils.R
+├── inst/
+│   └── extdata/
+│       ├── dois.csv                        # Example DOI list for testing
+│       └── csv-painANDgen-set.csv          # Example PubMed export
 ├── tests/
 │   ├── testthat.R
 │   └── testthat/
