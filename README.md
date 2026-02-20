@@ -87,7 +87,7 @@ install.packages("pdftools")
 library(paperfetch)
 
 # Use the included example dataset from PubMed (pain and genetics literature)
-import_refs("inst/extdata/csv/csv-painANDgen-set.csv") |>
+import_refs("inst/extdata/csv-painANDgen-set.csv") |>
   fetch_refs_pdfs(email = Sys.getenv("PAPERFETCH_EMAIL"))
 ```
 
